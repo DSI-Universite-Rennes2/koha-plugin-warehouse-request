@@ -1,4 +1,4 @@
-PROJECTNAME="{PROJECT}"
+PROJECTNAME="koha-plugin-warehouse-request"
 FILEPATH="Koha/Plugin/Fr/UnivRennes2"
-FILENAME="{PACKAGE}.pm"
-VERSION="{VERSION}"
+FILENAME="WarehouseRequest.pm"
+VERSION="0.5"

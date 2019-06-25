@@ -1,4 +1,4 @@
-package Koha::Plugin::Fr::UnivRennes2::{PACKAGE};
+package Koha::Plugin::Fr::UnivRennes2::WarehouseRequest;
 
 use utf8;
 use Modern::Perl;
@@ -9,14 +9,14 @@ our $VERSION = '{VERSION}';
 
 ## Here is our metadata, some keys are required, some are optional
 our $metadata = {
-    name            => '{NAME}',
+    name            => 'Demandes magasin',
     author          => '{AUTHOR}',
-    date_authored   => '{CREATION_DATE}',
+    date_authored   => '2019-06-25',
     date_updated    => '{UPDATE_DATE}',
-    minimum_version => '{MIN_KOHA_VERSION}',
+    minimum_version => '18.110000',
     maximum_version => undef,
     version         => $VERSION,
-    description     => '{DESCRIPTION}',
+    description     => 'Permet de gérer les demandes de document en magasin.',
 };
 
 sub new {
