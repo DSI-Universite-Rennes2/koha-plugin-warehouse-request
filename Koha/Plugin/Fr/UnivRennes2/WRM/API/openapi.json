@@ -1,0 +1,251 @@
+{
+    "/update_status": {
+        "post": {
+            "x-mojo-to": "Fr::UnivRennes2::WRM::API::WarehouseRequestConnector#update_status",
+            "operationId": "updateWRstatus",
+            "tags": ["warehouserequests"],
+            "produces": [
+                "application/json"
+            ],
+            "parameters": [
+                {
+                    "name": "id",
+                    "in": "formData",
+                    "description": "Internal warehouse request identifier",
+                    "required": true,
+                    "type": "integer"
+                },{
+                    "name": "action",
+                    "in": "formData",
+                    "description": "Action to process to the warehouse request",
+                    "required": true,
+                    "type": "string",
+                    "enum": [
+                        "process",
+                        "wait",
+                        "complete",
+                        "cancel"
+                    ],
+                    "default": "process"
+                },{
+                    "name": "notes",
+                    "in": "formData",
+                    "description": "Reasons to cancelation",
+                    "required": false,
+                    "type": "string"
+                }
+            ],
+            "responses": {
+                "200": {
+                    "description": "Successness of the status update",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "success": {
+                                "description": "Tells if the action succeeded",
+                                "type": "boolean"
+                            }
+                        }
+                    }
+                },
+                "404": {
+                    "description": "An error occured",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "error": {
+                                "description": "An explanation for the error",
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "502": {
+                    "description": "An error occured",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "error": {
+                                "description": "An explanation for the error",
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "x-koha-authorization": {
+                "permissions": {
+                    "circulate": "1"
+                }
+            }
+        }
+    },
+    "/request": {
+        "get": {
+            "x-mojo-to": "Fr::UnivRennes2::WRM::API::WarehouseRequestConnector#request",
+            "operationId": "createWR",
+            "tags": ["warehouserequests"],
+            "produces": [
+                "application/json"
+            ],
+            "parameters": [
+                {
+                    "name": "biblionumber",
+                    "in": "query",
+                    "description": "Requesteditem biblionumber",
+                    "required": false,
+                    "type": "integer"
+                },{
+                    "name": "itemnumber",
+                    "in": "query",
+                    "description": "Requested item itemnumber",
+                    "required": false,
+                    "type": "integer"
+                },{
+                    "name": "callnumber",
+                    "in": "query",
+                    "description": "Requested item callnumber",
+                    "required": false,
+                    "type": "string"
+                },{
+                    "name": "type",
+                    "in": "query",
+                    "description": "Requested item type",
+                    "required": false,
+                    "type": "string"
+                },{
+                    "name": "volume",
+                    "in": "query",
+                    "description": "Requested item volume",
+                    "required": false,
+                    "type": "string"
+                },{
+                    "name": "issue",
+                    "in": "query",
+                    "description": "Requested item issue",
+                    "required": false,
+                    "type": "string"
+                },{
+                    "name": "year",
+                    "in": "query",
+                    "description": "Requested item year",
+                    "required": false,
+                    "type": "string"
+                },{
+                    "name": "message",
+                    "in": "query",
+                    "description": "Request comment",
+                    "required": false,
+                    "type": "string"
+                },{
+                    "name": "ticket",
+                    "in": "query",
+                    "description": "CAS ticket",
+                    "required": true,
+                    "type": "string"
+                }
+            ],
+            "responses": {
+                "200": {
+                    "description": "Successness of the creation",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "state": {
+                                "description": "Tells if the action succeeded",
+                                "type": "string",
+                                "enum": [
+                                    "success",
+                                    "failed"
+                                ]
+                            },
+                            "error": {
+                                "description": "Error message if failed",
+                                "type": "string",
+                                "enum": [
+                                    "LOGIN_FAILED",
+                                    "USER_NOT_FOUND",
+                                    "MISSING_INFO_JOURNAL",
+                                    "WS_CALL_FAILED"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "404": {
+                    "description": "An error occured",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "error": {
+                                "description": "An explanation for the error",
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "502": {
+                    "description": "An error occured",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "error": {
+                                "description": "An explanation for the error",
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "list/" {
+        "get": {
+            "x-mojo-to": "Fr::UnivRennes2::WRM::API::WarehouseRequestConnector#list",
+            "operationId": "listSelfWR",
+            "tags": ["warehouserequests"],
+            "produces": [
+                "application/json"
+            ],
+            "parameters": [],
+            "responses": {
+                "200": {
+                    "description": "List of the user warehouse requests",
+                    "schema": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "./definitions/warehouse_requests.json"
+                        }
+                    }
+                },
+                "404": {
+                    "description": "An error occured",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "error": {
+                                "description": "An explanation for the error",
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "502": {
+                    "description": "An error occured",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "error": {
+                                "description": "An explanation for the error",
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "x-koha-authorization": {
+                "allow-owner": true
+            }
+        }
+    }
+}

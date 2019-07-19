@@ -1,0 +1,58 @@
+@page { size: A6; margin: 10mm}
+
+pre { 
+    font-family: "Arial Black", sans-serif;
+    white-space: pre-wrap;
+    white-space: -moz-pre-wrap;
+    white-space: -o-pre-wrap;
+    word-wrap: break-work;
+    font-size: 11pt;
+}
+div.message, .note {
+    text-align: center;
+    width: 100% !important;
+    background: transparent !important;
+    border: 0 !important;
+}
+body {
+    width:105mm;
+    height:148mm;
+    font-size:12px;
+    font-family:'Times New Roman';
+    padding: 0 !important;
+    margin: 10mm !important;
+}
+.content {
+    position: relative;
+    top: -.250in;
+    left: 0.0in;
+     padding : 0 10px 0 10px
+}
+.note {
+    font-size: 110%;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.user {
+    font-size: 160%;
+    font-weight :bold;
+}
+.barcode{
+    font-size:200%;
+    font-weight:bold;
+}
+.small {
+  text-align: right;
+  font-size: 80%
+}
+#changelanguage {
+  display: none;
+}
+body {-webkit-print-color-adjust: exact;}
+#receipt table.hbc {border-width:0;border-spacing:0;margin:auto;}
+table.hbc {border-width:0;border-spacing:0;}
+#receipt table.hbc tr, #receipt table.hbc td{border:0;margin:0;padding:0;}
+table.hbc td { position: relative; overflow: hidden; }
+table.hbc td:before { content: ''; position: absolute; }
+table.hbc td.hbc_on:before { border: 999999px #000 solid; }
+table.hbc td.hbc_off:before { border: 999999px #FFF solid; }

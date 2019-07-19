@@ -1,0 +1,63 @@
+{
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "integer",
+            "description": "Internal WR identifier"
+        },
+        "itemnumber": {
+            "type": "integer",
+            "description": "Internal item identifier"
+        },
+        "branchcode": {
+            "type": "string",
+            "description": "Internal library identifier"
+        },
+        "volume": {
+            "type": ["string", "null"],
+            "description": "Requested item volume"
+        },
+        "issue": {
+            "type": ["string", "null"],
+            "description": "Requested item issue"
+        },
+        "date": {
+            "type": ["string", "null"],
+            "description": "Requested item date"
+        },
+        "patron_name": {
+            "type": ["string", "null"],
+            "description": "Requested item date"
+        },
+        "patron_notes": {
+            "type": ["string", "null"],
+            "description": "Comment form the patron"
+        },
+        "status": {
+            "type": "string",
+            "enum": [
+                "PENDING",
+                "PROCESSING",
+                "WAITING",
+                "COMPLETED",
+                "CANCELED"
+            ],
+            "description": "Status of the request"
+        },
+        "created_on": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp for the request creation"
+        },
+        "update_on": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp for the latest hold update"
+        },
+        "deadline": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Timestamp for the deadline to get the document"
+        }
+    }
+}

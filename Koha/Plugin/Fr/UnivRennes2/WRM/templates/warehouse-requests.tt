@@ -1,0 +1,1010 @@
+[% USE date %]
+[% USE KohaDates %]
+[% USE ItemTypes %]
+[% USE Branches %]
+[% USE AuthorisedValues %]
+[% INCLUDE 'doc-head-open.inc' %]
+<title>Koha &rsaquo; Circulation &rsaquo; Demandes magasin</title>
+[% INCLUDE 'doc-head-close.inc' %]
+<style type="text/css"> p { margin-top: 0; }</style>
+<link rel="stylesheet" type="text/css" href="[% interface %]/[% theme %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
+<script type="text/javascript" src="[% interface %]/lib/jquery/plugins/jquery.checkboxes.min.js"></script>
+<script type="text/javascript">
+   //<![CDATA[
+      $(document).ready(function() {
+         $("#article-requests-pending-table,#article-requests-processing-table,#article-requests-waiting-table,#article-requests-completed-table,#article-requests-canceled-table").dataTable($.extend(true, {}, dataTablesDefaults, {
+            "aoColumnDefs": [
+               { "bVisible": false, "aTargets": [ 3,5 ] },
+               { "bSortable": true, "aTargets": ["_all"] },             
+               { "sType": "ar-date", "aTargets" : [ "ar-date" ] },
+               { "sType": "ar-title", "aTargets" : [ "ar-title" ] }
+            ],
+            "aaSorting": [[ 7, 'desc' ]],
+            "sPaginationType": "four_button"
+         }));
+      });
+   //]]>
+</script>
+<style type="text/css">
+   #article-requests-waiting-table .ar-waiting .ar-date span.toolate {
+      color: tomato;
+      font-weight: 700;
+   }
+</style>
+</head>
+<body id="circ_article-requests" class="circ">
+   [% INCLUDE 'header.inc' %]
+   [% INCLUDE 'cat-search.inc' %]
+   <script type="text/javascript">
+      //<![CDATA[
+         $(document).ready(function() {
+            $('#article-request-tabs').tabs({
+               // Correct table sizing for tables hidden in tabs
+               // http://www.datatables.net/examples/api/tabs_and_scrolling.html
+               "activate": function(event, ui) {
+               $( $.fn.dataTable.tables( true ) ).DataTable().columns.adjust();
+               }
+            });
+            
+            if(window.location.hash) {
+               var hash = window.location.hash.substring(1); 
+               if($("#f-ar-"+hash+'').size() > 0){
+                  console.log(hash);
+                  $('#f-ar-'+hash+' #id').focus();
+               }
+            }  
+            
+            submitUpRequest();
+            
+            [% IF warehouse_requests_pending.count %]
+               $(".ar-pending-none").hide();
+            [% END %]
+            
+            [% IF warehouse_requests_processing.count %]
+               $(".ar-processing-none").hide();
+            [% END %]
+            
+            [% IF warehouse_requests_waiting.count %]
+               $(".ar-waiting-none").hide();
+            [% END %]
+            
+            [% IF warehouse_requests_canceled.count %]
+               $(".ar-canceled-none").hide();
+            [% END %]
+            
+            [% IF warehouse_requests_completed.count %]
+               $(".ar-completed-none").hide();
+            [% END %]
+            
+            
+            [% FOREACH ar IN warehouse_requests_pending %]
+               $("#CheckAllarticle-requests-pending").click(function(e){
+                  $("#article-requests-pending-table").checkCheckboxes();
+                  e.preventDefault();
+               });
+               $("#UncheckAllarticle-requests-pending").click(function(e){
+                  $("#article-requests-pending-table").unCheckCheckboxes();
+                  e.preventDefault();
+               });              
+            [% END %]
+            [% FOREACH ar IN warehouse_requests_processing %]
+               $("#CheckAllarticle-requests-processing").click(function(e){
+                  $("#article-requests-processing-table").checkCheckboxes();
+                  e.preventDefault();
+               });
+               $("#UncheckAllarticle-requests-processing").click(function(e){
+                  $("#article-requests-processing-table").unCheckCheckboxes();
+                  e.preventDefault();
+               });
+               $("#other_reason-ar-processing").hide();
+               $("#reason-ar-processing").change(function(){
+                  if($(this).val() == "other"){
+                     $(this).hide();
+                     $("#other_reason-ar-processing").show();
+                  }
+               });              
+            [% END %]
+            [% FOREACH ar IN warehouse_requests_waiting %]
+               $("#CheckAllarticle-requests-waiting").click(function(e){
+                  $("#article-requests-waiting-table").checkCheckboxes();
+                  e.preventDefault();
+               });
+               $("#UncheckAllarticle-requests-waiting").click(function(e){
+                  $("#article-requests-waiting-table").unCheckCheckboxes();
+                  e.preventDefault();
+               });
+               $("#other_reason-ar-waiting").hide();
+               $("#reason-ar-waiting").change(function(){
+                  if($(this).val() == "other"){
+                     $(this).hide();
+                     $("#other_reason-ar-waiting").show();
+                  }
+               });               
+            [% END %]   
+            $("a[href*=back]").click(function(){
+               var sid = $(this).attr("href").replace(/#back/,"");
+               $("#reason"+sid).show().find("option[value='']").attr("selected","selected");
+               $("#other_reason"+sid).hide();
+            });
+            
+            $("a.ar-print-request").click(function(e) {
+               e.preventDefault();
+               var id = $(this).attr('id');
+               PrintSlip('/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3AFr%3A%3AUnivRennes2%3A%3AWRM&method=tool&op=ticket&id='+id);
+               return false;
+            });
+         });
+         
+         function submitUpRequest() {
+            $('.ar-form').on('submit', function(e) { //use on if jQuery 1.7+
+               e.preventDefault();  //prevent form from submitting
+               var type = $(this).children('input[name="type"]').val();
+               var reqtype = $(this).children('input[name="reqtype"]').val(); 
+               if(type === 'scan') {
+                  var action = $("#f-ar-"+reqtype+" #action").val();
+                  var id = $("#f-ar-"+reqtype+" #id").val();
+                  console.log(action);
+                  console.log(id);
+                  if(id != "") {
+                     $.ajax({
+                        type: "POST",
+                        url: '/api/v1/contrib/wrm/update_status',
+                        data: {
+                           action: action,
+                           id: id,
+                           notes: ""
+                        },
+                        dataType: 'json',
+                        async: false,
+                        success: function (data, textStatus, jqXHR) {
+                           if (data.success) {
+                              alert("La demande "+id+" a été ajoutée");
+                           } else {
+                              alert("La requête n'a pu aboutir.");
+                           };
+                        },
+                        error: function (jqXHR, textStatus, errorThrown) {
+                           alert("La requête n'a pu aboutir");
+                        }
+                     });
+                  }
+                  window.location.hash = "#"+reqtype;
+               } else if(type === 'manual') {
+                  var action = $("#status-ar-"+reqtype+" #action").find(":selected").val();
+                  var reason = "";
+                  if($("#reason-ar-"+reqtype).length > 0) {
+                     reason = $("#reason-ar-"+reqtype).find(":selected").val(); 
+                     if(reason === "other"){
+                        reason = $("#select-other_reason-ar-"+reqtype).val();
+                     }
+                  }
+                  console.log(action);
+                  $("#article-requests-"+reqtype+" input:checkbox[name=id]:checked").each(function() {
+                     console.log( $(this).val());
+                     $.ajax({
+                        type: "POST",
+                        url: '/api/v1/contrib/wrm/update_status',
+                        data: {
+                           action: action,
+                           id: $(this).val(),
+                           notes: reason
+                        },
+                        dataType: 'json',
+                        cache: false,
+                        async: false,
+                        success: function (data, textStatus, jqXHR) {
+                           var errors = {
+                              0 : "La requête n'a pu aboutir.",
+                              1 : "La demande "+id+" a été ajoutée",
+                           };
+                           console.log(errors[data.success]);                                                  
+                        },
+                        error: function (jqXHR, textStatus, errorThrown) {
+                           alert("La requête n'a pu aboutir");
+                        }
+                     });
+                  });
+                  window.location.hash = "#article-requests-"+reqtype;
+               }
+               setTimeout(function() {              
+                  window.location.reload();
+               },0);
+               /*this.submit();*/
+            });
+         }
+         
+         function PrintSlip(link) {
+            window.open(link, 'popup', 'width=600,height=400,resizable=1,toolbar=0,scrollbars=1,top');
+         }
+         
+         function Cancel( id, a ) {
+            notes = prompt(_("Raison de l'annulation:"));
+            if ( notes == null ) {
+            return;
+            }
+            var table_row = a.closest('tr').clone();
+            table_row.find('.ar-cancel-request').remove();
+            
+            
+            a.closest('td').prepend('<img src="[% interface %]/[% theme %]/img/loading-small.gif"/>');
+            a.closest('div').hide();
+            $.ajax({
+               type: "POST",
+               url: '/api/v1/contrib/wrm/update_status',
+               data: {
+                  action: 'cancel',
+                  id: id,
+                  notes: notes
+               },
+               success: function( data ) {
+                  a.closest('tr').remove();
+                  $("#article-requests-canceled-table").append( table_row );
+                  $("#article-requests-canceled-table .ar-processing-none").hide();
+                  UpdateTabCounts()
+               },
+               dataType: 'json'
+            });
+         }
+         
+         function Process( id, a ) {
+            var table_row = a.closest('tr').clone();
+            table_row.find('.ar-process-request').remove();
+            table_row.find('.ar-process-print-request').remove();
+            table_row.find('.ar-process-print-request').remove();
+            table_row.find('.ar-actions .dropdown  .dropdown-menu li').prepend('<a class="ar-waiting-request" href="#" onclick="Wait( '+id+', $(this) ); return false;"><i class="icon-ok-circle"></i>Wait request</a>')
+            a.closest('td').prepend('<img src="[% interface %]/[% theme %]/img/loading-small.gif"/>');
+            a.closest('div').hide();
+            $.ajax({
+               type: "POST",
+               url: '/api/v1/contrib/wrm/update_status',
+               data: {
+                  action: 'process',
+                  id: id,
+               },
+               success: function( data ) {
+                  a.closest('tr').remove();
+                  $("#article-requests-processing-table").append( table_row );
+                  $("#article-requests-processing-table .ar-processing-none").hide();
+                  UpdateTabCounts()
+               },
+               dataType: 'json'
+            });
+         }
+         
+         function Wait( id, a ) {
+            var table_row = a.closest('tr').clone();
+            table_row.find('.ar-waiting-request').remove();
+            table_row.find('.ar-actions .dropdown  .dropdown-menu li').prepend('<a class="ar-completed-request" href="#" onclick="Completed( '+id+', $(this) ); return false;"><i class="icon-ok-circle"></i>Complete request</a>')
+            
+            a.closest('td').prepend('<img src="[% interface %]/[% theme %]/img/loading-small.gif"/>');
+            a.closest('div').hide();
+            $.ajax({
+               type: "POST",
+               url: '/api/v1/contrib/wrm/update_status',
+               data: {
+                  action: 'wait',
+                  id: id,
+               },
+               success: function( data ) {
+                  a.closest('tr').remove();
+                  $("#article-requests-waiting-table").append( table_row );
+                  $("#article-requests-waiting-table .ar-waiting-none").hide();
+                  UpdateTabCounts()
+               },
+               dataType: 'json'
+            });
+         }
+         
+         function Complete( id, a ) {
+            var table_row = a.closest('tr').clone();
+            table_row.find('.ar-complete-request').remove();
+            
+            a.closest('td').prepend('<img src="[% interface %]/[% theme %]/img/loading-small.gif"/>');
+            a.closest('div').hide();
+            $.ajax({
+               type: "POST",
+               url: '/api/v1/contrib/wrm/update_status',
+               data: {
+                  action: 'complete',
+                  id: id,
+               },
+               success: function( data ) {
+                  a.closest('tr').remove();
+                  $("#article-requests-completed-table").append( table_row );
+                  $("#article-requests-completed-table .ar-waiting-none").hide();
+                  UpdateTabCounts()
+               },
+               dataType: 'json'
+            });
+         }
+         
+         /**
+         *  displayOther.
+         *  This function display the select or an textaera to write a reason.
+         */
+         function displayOther(id,show,hide){
+            $("#"+hide+id).hide();
+            $("#"+show+id).show();
+         }
+         
+         
+         function UpdateTabCounts() {
+            var pending_count = $('#article-requests-pending-table tbody tr.ar-row').length;
+            $("#ar_pending_count").html( pending_count );
+            if ( pending_count == 0 ) $(".ar-pending-none").show();
+            
+            var processing_count = $('#article-requests-processing-table tbody tr.ar-row').length;
+            $("#ar_processing_count").html( processing_count );
+            if ( processing_count == 0 ) $(".ar-processing-none").show();
+            
+            var waiting_count = $('#article-requests-waiting-table tbody tr.ar-row').length;
+            $("#ar_waiting_count").html( waiting_count );
+            if ( waiting_count == 0 ) $(".ar-waiting-none").show();
+            
+            var completed_count = $('#article-requests-completed-table tbody tr.ar-row').length;
+            $("#ar_completed_count").html( completed_count );
+            if ( completed_count == 0 ) $(".ar-completed-none").show();
+            
+            var canceled_count = $('#article-requests-canceled-table tbody tr.ar-row').length;
+            $("#ar_canceled_count").html( canceled_count );
+            if ( canceled_count == 0 ) $(".ar-canceled-none").show();
+         }
+      //]]>
+   </script>
+   <div id="breadcrumbs">
+      <a href="/cgi-bin/koha/mainpage.pl">Accueil</a>
+      &rsaquo;
+      <a href="/cgi-bin/koha/circ/circulation-home.pl">Circulation</a>
+      &rsaquo;
+      Demandes magasin
+   </div>
+   <div id="doc3" class="yui-t2">
+   <div id="bd">
+      <div id="yui-main">
+         <div class="yui-b">
+            <h1>Demandes magasin</h1>
+            <form id="ar-branchcode-form" method="post">
+               <select name="branchcode" id="branchcode">
+                  <option value="">Tous les sites</option>
+                  [% FOREACH b IN Branches.all %]
+                  [% IF b.branchcode == branchcode %]
+                  <option value="[% b.branchcode %]" selected="selected">[% b.branchname %]</option>
+                  [% ELSE %]
+                  <option value="[% b.branchcode %]">[% b.branchname %]</option>
+                  [% END %]
+                  [% END %]
+               </select>
+               <button type="submit" class="btn btn-xs" type="submit">
+               <i class="fa fa-refresh"></i> Mettre à jour</button>
+            </form>
+            <div id="article-request-tabs" class="toptabs">
+               <ul>
+                  <li>
+                     <a href="#article-requests-pending">
+                     En attente (<span id="ar_pending_count">[% warehouse_requests_pending.count %]</span>)
+                     </a>
+                  </li>
+                  <li>
+                     <a href="#article-requests-processing">
+                     En traitement (<span id="ar_processing_count">[% warehouse_requests_processing.count %]</span>)
+                     </a>
+                  </li>
+                  <li>
+                     <a href="#article-requests-waiting">
+                     Disponibles (<span id="ar_waiting_count">[% warehouse_requests_waiting.count %]</span>)
+                     </a>
+                  </li>
+                  <li>
+                     <a href="#article-requests-canceled">
+                     Annulées (<span id="ar_canceled_count">[% warehouse_requests_canceled.count %]</span>)
+                     </a>
+                  </li>
+                  <li>
+                     <a href="#article-requests-completed">
+                     Terminées (<span id="ar_completed_count">[% warehouse_requests_completed.count %]</span>)
+                     </a>
+                  </li>
+               </ul>
+               <div id="article-requests-pending">
+                  <div class="ar-pending-none">
+                     <p>There are no pending article requests at this time.</p>
+                  </div>
+                  <p><a id="CheckAllarticle-requests-pending" href="#">Tout sélectionner</a> | <a id="UncheckAllarticle-requests-pending" href="#">Tout désélectionner</a></p>
+                  <form id="f-ar-pending" name="f-ar-pending" method="post" class="ar-form" action="/cgi-bin/koha/circ/article-requests.pl#article-requests-pending">
+                     <input type="hidden" name="type" value="manual"/>
+                     <input type="hidden" name="reqtype" value="pending"/>
+                     <table id="article-requests-pending-table">
+                        <thead>
+                           <tr>
+                              <th class="ar-id">N°</th>
+                              <th class="ar-title">Titre</th>
+                              <th class="ar-request">Informations complémentaires</th>
+                              <th class="ar-itemtype">Type de document</th>
+                              <th class="ar-callnumber">Cote</th>
+                              <th class="ar-barcode">Code à barres</th>
+                              <th class="ar-patron">Adhérent</th>
+                              <th class="ar-date">Date</th>
+                              <!-- <th class="ar-actions">Actions</th> -->
+                           </tr>
+                        </thead>
+                        <tbody>
+                           [% FOREACH ar IN warehouse_requests_pending %]
+                           <tr class="ar-row ar-pending">
+                              <td class="ar-id">
+                                 [% ar.id %] <input type="checkbox" name="id" value="[% ar.id %]">
+                              </td>
+                              <td class="ar-title">
+                                 <p>
+                                    <a href="/cgi-bin/koha/circ/request-article.pl?biblionumber=[% ar.biblionumber %]">
+                                    <strong>[% ar.biblio.title | html %]</strong>
+                                    [% FOREACH s IN itemsloo.subtitle %] [% s %][% END %]
+                                    </a>
+                                 </p>
+                                 <p>
+                                 <div class="ar-biblionumber content_hidden">[% ar.biblionumber %]</div>
+                                 <div class="ar-author">[% ar.biblio.author %]</div>
+                                 <div class="ar-pubdata">
+                                    [% ar.biblio.biblioitem.publishercode %] [% IF ar.biblio.biblioitem.publicationyear %] [% ar.biblio.biblioitem.publicationyear %] [% ELSIF ar.biblio.copyrightdate %] [% ar.biblio.copyrightdate %] [% END %] [% IF ar.biblio.biblioitem.pages %] : [% ar.biblio.biblioitem.pages %] [% END %] [%  r.biblio.biblioitem.size %] [% IF ar.biblio.biblioitem.isbn %] ISBN&nbsp;: [% ar.biblio.biblioitem.isbn %] [% END %] 
+                                 </div>
+                                 </p>
+                              </td>
+                              <td class="ar-request">
+                                 [% IF ar.title %] 
+                                 <p><strong>Titre&nbsp;:</strong> [% ar.title %] </p>
+                                 [% END %]
+                                 [% IF ar.author %] 
+                                 <p><strong>Auteur&nbsp;:</strong> [% ar.author %] </p>
+                                 [% END %]
+                                 [% IF ar.volume %] 
+                                 <p><strong>Volume(s)&nbsp;:</strong> [% ar.volume %] </p>
+                                 [% END %]
+                                 [% IF ar.issue %] 
+                                 <p><strong>Numéro(s)&nbsp;:</strong> [% ar.issue %] </p>
+                                 [% END %]
+                                 [% IF ar.date %] 
+                                 <p><strong>Date&nbsp;:</strong> [% ar.date %] </p>
+                                 [% END %]
+                                 [% IF ar.pages %] 
+                                 <p><strong>Pages&nbsp;:</strong> [% ar.pages %] </p>
+                                 [% END %]
+                                 [% IF ar.chapters %] 
+                                 <p><strong>Chapitres&nbsp;:</strong> [% ar.chapters %] </p>
+                                 [% END %]
+                                 [% IF ar.patron_notes %] 
+                                 <p><strong>Autre information <br />(Nom, Pr&eacute;nom et contact si lecteur de passage)&nbsp;:</strong> [% ar.patron_notes %] </p>
+                                 [% END %]
+                              </td>
+                              <td class="ar-itemtype">[% ItemTypes.GetDescription( ar.item.effective_itemtype ) %]</td>
+                              <td class="ar-callnumber">
+                                 [% IF ar.item.location %]
+                                 <em>[% AuthorisedValues.GetByCode( 'LOC', ar.item.location ) %]</em>
+                                 [% END %]
+                                 [% ar.item.itemcallnumber %]
+                              </td>
+                              <td class="ar-barcode">[% ar.item.barcode %]</td>
+                              <td class="ar-patron">
+                                 <p>
+                                    <a href="/cgi-bin/koha/circ/circulation.pl?findborrower=[% ar.borrower.cardnumber %]">
+                                    [% ar.borrower.surname %][% IF ar.borrower.firstname %], [% ar.borrower.firstname %][% END %]
+                                    </a>
+                                 </p>
+                                 <p>[% ar.borrower.phone %]</p>
+                              </td>
+                              <td class="ar-date"><span title="[% ar.created_on %]">[% ar.created_on | $KohaDates %]</span></td>
+                              <!-- 
+                                 <td class="ar-actions">
+                                 <div class="dropdown">
+                                 <a class="btn btn-mini dropdown-toggle" id="ar-actions" role="button" data-toggle="dropdown" href="#">
+                                 Actions <b class="caret"></b>
+                                 </a>
+                                 <ul class="dropdown-menu pull-right" role="menu" aria-labelledby="ar-actions">
+                                 <li>
+                                 <a class="ar-process-request" href="#" onclick="Process( [% ar.id %], $(this) ); return false; ">
+                                 <i class="fa fa-cog"></i>
+                                 Process request
+                                 </a>
+                                 </li>
+                                 </ul>
+                                 </div>
+                                 </td>
+                                 --> 
+                           </tr>
+                           [% END %]
+                        </tbody>
+                     </table>
+                     <fieldset>
+                        <div id="select-status-ar-pending">
+                           <div id="status-ar-pending">
+                              <label for="action">Marquer les éléments sélectionnés comme: </label>
+                              <select name="action" id="action">
+                                 <option value=""> -- Choisir un état --</option>
+                                 <option value="process">En traitement</option>
+                              </select>
+                           </div>
+                        </div>
+                     </fieldset>
+                     <fieldset class="action">
+                        <input value="Valider" type="submit" />
+                     </fieldset>
+                  </form>
+               </div>
+               <div id="article-requests-processing">
+                  <div class="ar-processing-none">
+                     <p>
+                        Il n'y a pas de demandes magasin en cours en ce moment.
+                     </p>
+                  </div>
+                  <p><a id="CheckAllarticle-requests-processing" href="#">Tout sélectionner</a> | <a id="UncheckAllarticle-requests-processing" href="#">Tout désélectionner</a></p>
+                  <form id="f-ar-processing" name="f-ar-processing" class="ar-form" method="post" action="/cgi-bin/koha/circ/article-requests.pl#article-requests-processing">
+                     <input type="hidden" name="type" value="manual"/>
+                     <input type="hidden" name="reqtype" value="processing"/>
+                     <table id="article-requests-processing-table">
+                        <thead>
+                           <tr>
+                              <th class="ar-id">N°</th>
+                              <th class="ar-title">Titre</th>
+                              <th class="ar-request">Informations complémentaires</th>
+                              <th class="ar-itemtype">Type de document</th>
+                              <th class="ar-callnumber">Cote</th>
+                              <th class="ar-barcode">Code à barres</th>
+                              <th class="ar-patron">Adhérent</th>
+                              <th class="ar-date">Date</th>
+                              <th class="ar-actions">Actions</th>
+                           </tr>
+                        </thead>
+                        <tbody>
+                           [% FOREACH ar IN warehouse_requests_processing %]
+                           <tr class="ar-row ar-processing">
+                              <td class="ar-id">
+                                 [% ar.id %] <input type="checkbox" name="id" value="[% ar.id %]">
+                              </td>
+                              <td class="ar-title">
+                                 <p>
+                                    <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% ar.biblionumber %]">
+                                    <strong>[% ar.biblio.title | html %]</strong>
+                                    [% FOREACH s IN itemsloo.subtitle %] [% s %][% END %]
+                                    </a>
+                                 </p>
+                                 <p>
+                                 <div class="ar-biblionumber content_hidden">[% ar.biblionumber %]</div>
+                                 <div class="ar-author">[% ar.biblio.author %]</div>
+                                 <div class="ar-pubdata">
+                                    [% ar.biblio.biblioitem.publishercode %] [% IF ar.biblio.biblioitem.publicationyear %] [% ar.biblio.biblioitem.publicationyear %] [% ELSIF ar.biblio.copyrightdate %] [% ar.biblio.copyrightdate %] [% END %] [% IF ar.biblio.biblioitem.pages %] : [% ar.biblio.biblioitem.pages %] [% END %] [%  r.biblio.biblioitem.size %] [% IF ar.biblio.biblioitem.isbn %] ISBN&nbsp;: [% ar.biblio.biblioitem.isbn %] [% END %] 
+                                 </div>
+                                 </p>
+                              </td>
+                              <td class="ar-request">
+                                 [% IF ar.title %] 
+                                 <p><strong>Titre&nbsp;:</strong> [% ar.title %] </p>
+                                 [% END %]
+                                 [% IF ar.author %] 
+                                 <p><strong>Auteur&nbsp;:</strong> [% ar.author %] </p>
+                                 [% END %]
+                                 [% IF ar.volume %] 
+                                 <p><strong>Volume(s)&nbsp;:</strong> [% ar.volume %] </p>
+                                 [% END %]
+                                 [% IF ar.issue %] 
+                                 <p><strong>Numéro(s)&nbsp;:</strong> [% ar.issue %] </p>
+                                 [% END %]
+                                 [% IF ar.date %] 
+                                 <p><strong>Date&nbsp;:</strong> [% ar.date %] </p>
+                                 [% END %]
+                                 [% IF ar.pages %] 
+                                 <p><strong>Pages&nbsp;:</strong> [% ar.pages %] </p>
+                                 [% END %]
+                                 [% IF ar.chapters %] 
+                                 <p><strong>Chapitres&nbsp;:</strong> [% ar.chapters %] </p>
+                                 [% END %]
+                                 [% IF ar.patron_notes %] 
+                                 <p><strong>Autre information <br />(Nom, Pr&eacute;nom et contact si lecteur de passage)&nbsp;:</strong> [% ar.patron_notes %] </p>
+                                 [% END %]
+                              </td>
+                              <td class="ar-itemtype">[% ItemTypes.GetDescription( ar.item.effective_itemtype ) %]</td>
+                              <td class="ar-callnumber">
+                                 [% IF ar.item.location %]
+                                 <em>[% AuthorisedValues.GetByCode( 'LOC', ar.item.location ) %]</em>
+                                 [% END %]
+                                 [% ar.item.itemcallnumber %]
+                              </td>
+                              <td class="ar-barcode">[% ar.item.barcode %]</td>
+                              <td class="ar-patron">
+                                 <p>
+                                    <a href="/cgi-bin/koha/circ/circulation.pl?findborrower=[% ar.borrower.cardnumber %]">
+                                    [% ar.borrower.surname %][% IF ar.borrower.firstname %], [% ar.borrower.firstname %][% END %] 
+                                    </a>
+                                 </p>
+                                 <p>[% ar.borrower.phone %]</p>
+                              </td>
+                              <td class="ar-date"><span title="[% ar.updated_on %]">[% ar.updated_on | $KohaDates %]</span></td>
+                              <td class="ar-actions">
+                                 <a class="ar-print-request btn btn-xs" href="#" id="[% ar.id %]">
+                                    <i class="fa fa-print"></i> Imprimer
+                                 </a>
+                              </td>
+                           </tr>
+                           [% END %]
+                        </tbody>
+                     </table>
+                     <fieldset>
+                        <div id="select-status-ar-processing">
+                           <div id="status-ar-processing">
+                              <label for="action">Marquer les éléments sélectionnés comme: </label>
+                              <select name="action" id="action">
+                                 <option value=""> -- Choisir un état --</option>
+                                 <option value="wait">Disponible</option>
+                                 <option value="cancel">Annulé</option>
+                              </select>
+                              <label for="reason-ar-processing">avec le message:</label>
+                              <select id="reason-ar-processing" name="reason-ar-processing">
+                                 <option value=""> -- Choisir -- </option>
+                                 [% FOREACH reasonsloo IN reasonsloop %]
+                                 <option value="[% reasonsloo.lib %]">[% reasonsloo.lib %]</option>
+                                 [% END %] 
+                                 <option value="other">Autres...</option>
+                              </select>
+                              <span id="other_reason-ar-processing">
+                              <input name="other_reason-ar-processing" placeholder="merci d'indiquer la raison ici..." id="select-other_reason-ar-processing" size="31" type="text" />
+                              <a href="#back-ar-processing">Annuler</a>
+                              </span>
+                           </div>
+                        </div>
+                     </fieldset>
+                     <fieldset class="action">
+                        <input type="submit" value="Valider" />
+                     </fieldset>
+                  </form>
+               </div>
+               <div id="article-requests-waiting">
+                  <div class="ar-waiting-none">
+                     <p>
+                        There are no article requests in waiting at this time.
+                     </p>
+                  </div>
+                  <form id="f-ar-article-requests-waiting" name="f-ar-article-requests-waiting" class="ar-form" method="post" action="/cgi-bin/koha/circ/article-requests.pl#article-requests-waiting" autocomplete="off" >
+                     <input type="hidden" name="type" value="scan"/>
+                     <input type="hidden" name="reqtype" value="article-requests-waiting"/>
+                     <input type="hidden" name="action" id="action" value="wait"/>
+                     <fieldset>
+                        <legend>Ajouter une demande</legend>
+                        <label for="id">Code à barres&nbsp;: </label>
+                        <input name="id" id="id" size="14" class="focus"/>
+                        <input type="submit" value="Valider" />
+                     </fieldset>
+                  </form>
+                  <form id="f-ar-waiting" name="f-ar-waiting" class="ar-form" method="post" action="/cgi-bin/koha/circ/article-requests.pl#article-requests-waiting">
+                     <input type="hidden" name="type" value="manual"/>
+                     <input type="hidden" name="reqtype" value="waiting"/>
+                     <p><a id="CheckAllarticle-requests-waiting" href="#">Tout sélectionner</a> | <a id="UncheckAllarticle-requests-waiting" href="#">Tout désélectionner</a></p>
+                     <table id="article-requests-waiting-table">
+                        <thead>
+                           <tr>
+                              <th class="ar-id">N°</th>
+                              <th class="ar-title">Titre</th>
+                              <th class="ar-request">Informations complémentaires</th>
+                              <th class="ar-itemtype">Type de document</th>
+                              <th class="ar-callnumber">Cote</th>
+                              <th class="ar-barcode">Code à barres</th>
+                              <th class="ar-patron">Adhérent</th>
+                              <th class="ar-date">Date</th>
+                              <th class="ar-actions">Actions</th>
+                           </tr>
+                        </thead>
+                        <tbody>
+                           [% FOREACH ar IN warehouse_requests_waiting %]
+                           <tr class="ar-row ar-waiting">
+                              <td class="ar-id">
+                                 [% ar.id %] <input type="checkbox" name="id" value="[% ar.id %]">
+                              </td>
+                              <td class="ar-title">
+                                 <p>
+                                    <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% ar.biblionumber %]">
+                                    <strong>[% ar.biblio.title | html %]</strong>
+                                    [% FOREACH s IN itemsloo.subtitle %] [% s %][% END %]
+                                    </a>
+                                 </p>
+                                 <p>
+                                 <div class="ar-biblionumber content_hidden">[% ar.biblionumber %]</div>
+                                 <div class="ar-author">[% ar.biblio.author %]</div>
+                                 <div class="ar-pubdata">
+                                    [% ar.biblio.biblioitem.publishercode %] [% IF ar.biblio.biblioitem.publicationyear %] [% ar.biblio.biblioitem.publicationyear %] [% ELSIF ar.biblio.copyrightdate %] [% ar.biblio.copyrightdate %] [% END %] [% IF ar.biblio.biblioitem.pages %] : [% ar.biblio.biblioitem.pages %] [% END %] [%  r.biblio.biblioitem.size %] [% IF ar.biblio.biblioitem.isbn %] ISBN&nbsp;: [% ar.biblio.biblioitem.isbn %] [% END %] 
+                                 </div>
+                                 </p>
+                              </td>
+                              <td class="ar-request">
+                                 [% IF ar.title %] 
+                                 <p><strong>Titre&nbsp;:</strong> [% ar.title %] </p>
+                                 [% END %]
+                                 [% IF ar.author %] 
+                                 <p><strong>Auteur&nbsp;:</strong> [% ar.author %] </p>
+                                 [% END %]
+                                 [% IF ar.volume %] 
+                                 <p><strong>Volume(s)&nbsp;:</strong> [% ar.volume %] </p>
+                                 [% END %]
+                                 [% IF ar.issue %] 
+                                 <p><strong>Numéro(s)&nbsp;:</strong> [% ar.issue %] </p>
+                                 [% END %]
+                                 [% IF ar.date %] 
+                                 <p><strong>Date&nbsp;:</strong> [% ar.date %] </p>
+                                 [% END %]
+                                 [% IF ar.pages %] 
+                                 <p><strong>Pages&nbsp;:</strong> [% ar.pages %] </p>
+                                 [% END %]
+                                 [% IF ar.chapters %] 
+                                 <p><strong>Chapitres&nbsp;:</strong> [% ar.chapters %] </p>
+                                 [% END %]
+                                 [% IF ar.patron_notes %] 
+                                 <p><strong>Autre information <br />(Nom, Pr&eacute;nom et contact si lecteur de passage)&nbsp;:</strong> [% ar.patron_notes %] </p>
+                                 [% END %]
+                              </td>
+                              <td class="ar-itemtype">[% ItemTypes.GetDescription( ar.item.effective_itemtype ) %]</td>
+                              <td class="ar-callnumber">
+                                 [% IF ar.item.location %]
+                                 <em>[% AuthorisedValues.GetByCode( 'LOC', ar.item.location ) %]</em>
+                                 [% END %]
+                                 [% ar.item.itemcallnumber %]
+                              </td>
+                              <td class="ar-barcode">[% ar.item.barcode %]</td>
+                              <td class="ar-patron">
+                                 <p>
+                                    <a href="/cgi-bin/koha/circ/circulation.pl?findborrower=[% ar.borrower.cardnumber %]">
+                                    [% ar.borrower.surname %][% IF ar.borrower.firstname %], [% ar.borrower.firstname %][% END %] 
+                                    </a>
+                                 </p>
+                                 <p>[% ar.borrower.phone %]</p>
+                              </td>
+                              <td class="ar-date">
+                                 [% IF date.format( date.now, '%Y%m%d' ) > date.format( ar.deadline, '%Y%m%d' ) %]
+                                    <span title="[% ar.updated_on %]" class="toolate">[% ar.updated_on | $KohaDates %]</span>
+                                 [% ELSE %]
+                                    <span title="[% ar.updated_on %]">[% ar.updated_on | $KohaDates %]</span>
+                                 [% END %]
+                              </td>
+                              <td class="ar-actions">
+                                 <a class="ar-print-request btn btn-xs" href="#" id="[% ar.id %]">
+                                    <i class="fa fa-print"></i> Imprimer
+                                 </a>
+                              </td>
+                           </tr>
+                           [% END %]
+                        </tbody>
+                     </table>
+                     <fieldset>
+                        <div id="select-status-ar-waiting">
+                           <div id="status-ar-waiting">
+                              <label for="action">Marquer les éléments sélectionnés comme: </label>
+                              <select name="action" id="action">
+                                 <option value=""> -- Choisir un état --</option>
+                                 <option value="complete">Terminé</option>
+                                 <option value="cancel">Annulé</option>
+                              </select>
+                              <label for="reason-ar-waiting">avec le message:</label>
+                              <select id="reason-ar-waiting" name="reason-ar-waiting">
+                                 <option value=""> -- Choisir -- </option>
+                                 [% FOREACH reasonsloo IN reasonsloop %]
+                                 <option value="[% reasonsloo.lib %]">[% reasonsloo.lib %]</option>
+                                 [% END %] 
+                                 <option value="other">Autres...</option>
+                              </select>
+                              <span id="other_reason-ar-waiting">
+                              <input id="select-other_reason-ar-waiting" name="other_reason-ar-waiting" placeholder="merci d'indiquer la raison ici..." type="text" size="31" />
+                              <a href="#back-ar-waiting">Annuler</a>
+                              </span>
+                           </div>
+                        </div>
+                     </fieldset>
+                     <fieldset class="action">
+                        <input type="submit" value="Valider" />
+                     </fieldset>
+                  </form>
+               </div>
+               <div id="article-requests-completed">
+                  <div class="ar-completed-none">
+                     <p>
+                        There are no completed article requests at this time.
+                     </p>
+                  </div>
+                  <form id="f-ar-article-requests-completed" name="f-ar-article-requests-completed" class="ar-form" method="post" action="/cgi-bin/koha/circ/article-requests.pl#article-requests-completed" autocomplete="off" >
+                     <input type="hidden" name="type" value="scan"/>
+                     <input type="hidden" name="reqtype" value="article-requests-completed"/>
+                     <input type="hidden" name="action" id="action" value="complete"/>
+                     <fieldset>
+                        <legend>Ajouter une demande</legend>
+                        <label for="id">Code à barres&nbsp;: </label>
+                        <input name="id" id="id" size="14" class="focus"/>
+                        <input value="Valider" type="submit" />
+                     </fieldset>
+                  </form>
+                  <table id="article-requests-completed-table">
+                     <thead>
+                        <tr>
+                           <th class="ar-id">N°</th>
+                           <th class="ar-title">Titre</th>
+                           <th class="ar-request">Informations complémentaires</th>
+                           <th class="ar-itemtype">Type de document</th>
+                           <th class="ar-callnumber">Cote</th>
+                           <th class="ar-barcode">Code à barres</th>
+                           <th class="ar-patron">Adhérent</th>
+                           <th class="ar-date">Date</th>
+                           <th class="ar-actions">Actions</th>
+                        </tr>
+                     </thead>
+                     <tbody>
+                        [% FOREACH ar IN warehouse_requests_completed %]
+                        <tr class="ar-row ar-completed">
+                           <td class="ar-id">
+                              [% ar.id %]
+                           </td>
+                           <td class="ar-title">
+                              <p>
+                                 <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% ar.biblionumber %]">
+                                 <strong>[% ar.biblio.title | html %]</strong>
+                                 [% FOREACH s IN itemsloo.subtitle %] [% s %][% END %]
+                                 </a>
+                              </p>
+                              <p>
+                              <div class="ar-biblionumber content_hidden">[% ar.biblionumber %]</div>
+                              <div class="ar-author">[% ar.biblio.author %]</div>
+                              <div class="ar-pubdata">
+                                 [% ar.biblio.biblioitem.publishercode %] [% IF ar.biblio.biblioitem.publicationyear %] [% ar.biblio.biblioitem.publicationyear %] [% ELSIF ar.biblio.copyrightdate %] [% ar.biblio.copyrightdate %] [% END %] [% IF ar.biblio.biblioitem.pages %] : [% ar.biblio.biblioitem.pages %] [% END %] [%  r.biblio.biblioitem.size %] [% IF ar.biblio.biblioitem.isbn %] ISBN&nbsp;: [% ar.biblio.biblioitem.isbn %] [% END %] 
+                              </div>
+                              </p>
+                           </td>
+                           <td class="ar-request">
+                              [% IF ar.title %] 
+                              <p><strong>Titre&nbsp;:</strong> [% ar.title %] </p>
+                              [% END %]
+                              [% IF ar.author %] 
+                              <p><strong>Auteur&nbsp;:</strong> [% ar.author %] </p>
+                              [% END %]
+                              [% IF ar.volume %] 
+                              <p><strong>Volume(s)&nbsp;:</strong> [% ar.volume %] </p>
+                              [% END %]
+                              [% IF ar.issue %] 
+                              <p><strong>Numéro(s)&nbsp;:</strong> [% ar.issue %] </p>
+                              [% END %]
+                              [% IF ar.date %] 
+                              <p><strong>Date&nbsp;:</strong> [% ar.date %] </p>
+                              [% END %]
+                              [% IF ar.pages %] 
+                              <p><strong>Pages&nbsp;:</strong> [% ar.pages %] </p>
+                              [% END %]
+                              [% IF ar.chapters %] 
+                              <p><strong>Chapitres&nbsp;:</strong> [% ar.chapters %] </p>
+                              [% END %]
+                              [% IF ar.patron_notes %] 
+                              <p><strong>Autre information <br />(Nom, Pr&eacute;nom et contact si lecteur de passage)&nbsp;:</strong> [% ar.patron_notes %] </p>
+                              [% END %]
+                           </td>
+                           <td class="ar-itemtype">[% ItemTypes.GetDescription( ar.item.effective_itemtype ) %]</td>
+                           <td class="ar-callnumber">
+                              [% IF ar.item.location %]
+                              <em>[% AuthorisedValues.GetByCode( 'LOC', ar.item.location ) %]</em>
+                              [% END %]
+                              [% ar.item.itemcallnumber %]
+                           </td>
+                           <td class="ar-barcode">[% ar.item.barcode %]</td>
+                           <td class="ar-patron">
+                              <p>
+                                 <a href="/cgi-bin/koha/circ/circulation.pl?findborrower=[% ar.borrower.cardnumber %]">
+                                 [% ar.borrower.surname %][% IF ar.borrower.firstname %], [% ar.borrower.firstname %][% END %] 
+                                 </a>
+                              </p>
+                              <p>[% ar.borrower.phone %]</p>
+                           </td>
+                           <td class="ar-date"><span title="[% ar.updated_on %]">[% ar.updated_on | $KohaDates %]</span></td>
+                           <td class="ar-actions">
+                              <a class="ar-print-request btn btn-xs" href="#" id="[% ar.id %]">
+                                 <i class="fa fa-print"></i> Imprimer
+                              </a>
+                           </td>
+                        </tr>
+                        [% END %]
+                     </tbody>
+                  </table>
+               </div>
+               <div id="article-requests-canceled">
+                  <div class="ar-canceled-none">
+                     <p>
+                        There are no canceled article requests at this time.
+                     </p>
+                  </div>
+                  <table id="article-requests-canceled-table">
+                     <thead>
+                        <tr>
+                           <th class="ar-id">N°</th>
+                           <th class="ar-title">Titre</th>
+                           <th class="ar-request">Informations complémentaires</th>
+                           <th class="ar-itemtype">Type de document</th>
+                           <th class="ar-callnumber">Cote</th>
+                           <th class="ar-barcode">Code à barres</th>
+                           <th class="ar-patron">Adhérent</th>
+                           <th class="ar-date">Date</th>
+                           <th class="ar-notes">Motif</th>
+                           <th class="ar-actions">Actions</th>
+                        </tr>
+                     </thead>
+                     <tbody>
+                        [% FOREACH ar IN warehouse_requests_canceled %]
+                        <tr class="ar-row ar-canceled">
+                           <td class="ar-id">
+                              [% ar.id %]
+                           </td>
+                           <td class="ar-title">
+                              <p>
+                                 <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% ar.biblionumber %]">
+                                 <strong>[% ar.biblio.title | html %]</strong>
+                                 [% FOREACH s IN itemsloo.subtitle %] [% s %][% END %]
+                                 </a>
+                              </p>
+                              <p>
+                              <div class="ar-biblionumber content_hidden">[% ar.biblionumber %]</div>
+                              <div class="ar-author">[% ar.biblio.author %]</div>
+                              <div class="ar-pubdata">
+                                 [% ar.biblio.biblioitem.publishercode %] [% IF ar.biblio.biblioitem.publicationyear %] [% ar.biblio.biblioitem.publicationyear %] [% ELSIF ar.biblio.copyrightdate %] [% ar.biblio.copyrightdate %] [% END %] [% IF ar.biblio.biblioitem.pages %] : [% ar.biblio.biblioitem.pages %] [% END %] [%  r.biblio.biblioitem.size %] [% IF ar.biblio.biblioitem.isbn %] ISBN&nbsp;: [% ar.biblio.biblioitem.isbn %] [% END %] 
+                              </div>
+                              </p>
+                           </td>
+                           <td class="ar-request">
+                              [% IF ar.title %] 
+                              <p><strong>Titre&nbsp;:</strong> [% ar.title %] </p>
+                              [% END %]
+                              [% IF ar.author %] 
+                              <p><strong>Auteur&nbsp;:</strong> [% ar.author %] </p>
+                              [% END %]
+                              [% IF ar.volume %] 
+                              <p><strong>Volume(s)&nbsp;:</strong> [% ar.volume %] </p>
+                              [% END %]
+                              [% IF ar.issue %] 
+                              <p><strong>Numéro(s)&nbsp;:</strong> [% ar.issue %] </p>
+                              [% END %]
+                              [% IF ar.date %] 
+                              <p><strong>Date&nbsp;:</strong> [% ar.date %] </p>
+                              [% END %]
+                              [% IF ar.pages %] 
+                              <p><strong>Pages&nbsp;:</strong> [% ar.pages %] </p>
+                              [% END %]
+                              [% IF ar.chapters %] 
+                              <p><strong>Chapitres&nbsp;:</strong> [% ar.chapters %] </p>
+                              [% END %]
+                              [% IF ar.patron_notes %] 
+                              <p><strong>Autre information <br />(Nom, Pr&eacute;nom et contact si lecteur de passage)&nbsp;:</strong> [% ar.patron_notes %] </p>
+                              [% END %]
+                           </td>
+                           <td class="ar-itemtype">[% ItemTypes.GetDescription( ar.item.effective_itemtype ) %]</td>
+                           <td class="ar-callnumber">
+                              [% IF ar.item.location %]
+                              <em>[% AuthorisedValues.GetByCode( 'LOC', ar.item.location ) %]</em>
+                              [% END %]
+                              [% ar.item.itemcallnumber %]
+                           </td>
+                           <td class="ar-barcode">[% ar.item.barcode %]</td>
+                           <td class="ar-patron">
+                              <p>
+                                 <a href="/cgi-bin/koha/circ/circulation.pl?findborrower=[% ar.borrower.cardnumber %]">
+                                 [% ar.borrower.surname %][% IF ar.borrower.firstname %], [% ar.borrower.firstname %][% END %] 
+                                 </a>
+                              </p>
+                              <p>[% ar.borrower.phone %]</p>
+                           </td>
+                           <td class="ar-date"><span title="[% ar.updated_on %]">[% ar.updated_on | $KohaDates %]</span></td>
+                           <td class="ar-notes">
+                              [% IF ar.notes %] 
+                              <p><strong>[% ar.notes %] </strong> </p>
+                              [% END %]
+                           </td>
+                           <td class="ar-actions">
+                              <a class="ar-print-request btn btn-xs" href="#" id="[% ar.id %]">
+                                 <i class="fa fa-print"></i> Imprimer
+                              </a>
+                           </td>
+                        </tr>
+                        [% END %]
+                     </tbody>
+                  </table>
+               </div>
+            </div>
+         </div>
+      </div>
+   </div>
+   [% INCLUDE 'intranet-bottom.inc' %]
