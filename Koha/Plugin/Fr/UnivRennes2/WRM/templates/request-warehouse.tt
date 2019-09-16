@@ -304,33 +304,33 @@
                                     </tr>
                                 </thead>
                                 </tbody>
-                                [% FOREACH ar IN requests %]
+                                [% FOREACH wr IN requests %]
                                     <tr>
                                         <td>
-                                            <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% ar.borrowernumber %]">[% ar.borrower.firstname %] [% ar.borrower.surname %]</a>
-                                            [% IF ar.patron_name %]<br />[% ar.patron_name %][% END %]  
+                                            <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% wr.borrowernumber %]">[% wr.borrower.firstname %] [% wr.borrower.surname %]</a>
+                                            [% IF wr.patron_name %]<br />[% wr.patron_name %][% END %]  
                                         </td>
                                         <td>
-                                            [% IF ar.item %]
-                                                <a href="/cgi-bin/koha/catalogue/moredetail.pl?itemnumber=[% ar.itemnumber %]&biblionumber=[% ar.biblionumber %]"> [% ar.item.itemcallnumber %]</a>
+                                            [% IF wr.item %]
+                                                <a href="/cgi-bin/koha/catalogue/moredetail.pl?itemnumber=[% wr.itemnumber %]&biblionumber=[% wr.biblionumber %]"> [% wr.item.itemcallnumber %]</a>
                                             [% END %]
-                                            [% IF ar.volume %]Volume(s) : [% ar.volume %] [% END %]
-                                            [% IF ar.issue %]Numéro(s)(s) : [% ar.issue %] [% END %]
-                                            [% IF ar.date %]Date : [% ar.date %] [% END %]
+                                            [% IF wr.volume %]Volume(s) : [% wr.volume %] [% END %]
+                                            [% IF wr.issue %]Numéro(s)(s) : [% wr.issue %] [% END %]
+                                            [% IF wr.date %]Date : [% wr.date %] [% END %]
                                         </td>
-                                        <td>[% ar.created_on | $KohaDates with_hours => 1 %]</td>
-                                        <td>[% ar.deadline | $KohaDates %]</td>
-                                        <td>[% ar.patron_notes %]</td>
+                                        <td>[% wr.created_on | $KohaDates with_hours => 1 %]</td>
+                                        <td>[% wr.deadline | $KohaDates %]</td>
+                                        <td>[% wr.patron_notes %]</td>
                                         <td>
-                                            [% ar.status_label %]
-                                            [% IF ar.notes %]<br/>[% ar.notes %][% END %]
+                                            [% wr.status_label %]
+                                            [% IF wr.notes %]<br/>[% wr.notes %][% END %]
                                         </td>
                                         <td>
-                                            [% ar.branch.branchname %]
-                                            <!--<i id="update-processing-[% ar.id %]" class="fa fa-cog fa-spin hidden"></i>
-                                            <select name="branchcode" id="branchcode-[% ar.id %]" class="wr-update-branchcode">
+                                            [% wr.branch.branchname %]
+                                            <!--<i id="update-processing-[% wr.id %]" class="fa fa-cog fa-spin hidden"></i>
+                                            <select name="branchcode" id="branchcode-[% wr.id %]" class="wr-update-branchcode">
                                                 [% FOREACH b IN Branches.all %]
-                                                    [% IF b.branchcode == ar.branchcode %]
+                                                    [% IF b.branchcode == wr.branchcode %]
                                                         <option value="[% b.branchcode %]" selected="selected">[% b.branchname %]</option>
                                                     [% ELSE %]
                                                         <option value="[% b.branchcode %]">[% b.branchname %]</option>
@@ -339,12 +339,12 @@
                                             </select>-->
                                         </td>
                                         <td>
-                                            [% IF ar.status != 'COMPLETED' AND ar.status != 'CANCELED' %]
+                                            [% IF wr.status != 'COMPLETED' AND wr.status != 'CANCELED' %]
                                                 <div class="btn-group">
-                                                    [% IF ar.status == 'WAITING' %]
-                                                        <a data-id="[% ar.id %]" title="Terminer la demande" class="complete-wr btn-xs btn btn-success"><i class="fa fa-fw fa-check"></i> Terminer</a>
+                                                    [% IF wr.status == 'WAITING' %]
+                                                        <a data-id="[% wr.id %]" title="Terminer la demande" class="complete-wr btn-xs btn btn-success"><i class="fa fa-fw fa-check"></i> Terminer</a>
                                                     [% END %]
-                                                    <a data-id="[% ar.id %]" title="Annuler la demande" class="cancel-wr btn-xs btn btn-danger"><i class="fa fa-fw fa-close"></i> Annuler</a>
+                                                    <a data-id="[% wr.id %]" title="Annuler la demande" class="cancel-wr btn-xs btn btn-danger"><i class="fa fa-fw fa-close"></i> Annuler</a>
                                                 </div>
                                             [% END %]
                                         </td>
