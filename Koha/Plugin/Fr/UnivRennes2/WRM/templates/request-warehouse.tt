@@ -1,0 +1,364 @@
+[% USE Koha %]
+[% USE KohaDates %]
+[% USE Branches %]
+[% USE AuthorisedValues %]
+[% USE ItemTypes %]
+[% SET biblionumber = biblio.biblionumber %]
+[% INCLUDE 'doc-head-open.inc' %]
+<title>Koha &rsaquo; Circulation &rsaquo; Demande magasin</title>
+[% INCLUDE 'doc-head-close.inc' %]
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
+<script type="text/javascript">
+    // <![CDATA[
+    $('#current-requests-table').ready(function() {
+        $(".hide").hide();
+    });
+    
+    $(document).ready(function() {
+        $( "#patron" ).autocomplete({
+            source: "/cgi-bin/koha/circ/ysearch.pl",
+            minLength: 3,
+            select: function( event, ui ) {
+                $( "#patron" ).val( ui.item.cardnumber );
+                $( "#holds_patronsearch" ).submit();
+                return false;
+            }
+        })
+        .data( "ui-autocomplete" )._renderItem = function( ul, item ) {
+            return $( "<li></li>" )
+            .data( "ui-autocomplete-item", item )
+            .append( "<a>" + item.surname + ", " + item.firstname +
+                " (" + item.cardnumber + ") <small>" + item.address +
+                " " + item.city + " " + item.zipcode + " " +
+                item.country + "</small></a>" )
+            .appendTo( ul );
+        };
+        
+        $('#circ_request-warehouse .complete-wr').click(function() {
+            var id = $(this).attr('data-id');$.ajax({
+                type: "POST",
+                url: "/api/v1/contrib/wrm/update_status",
+                data: {
+                    id: id,
+                    action: 'complete',
+                },
+                success: function() {
+                    alert('La demande a été terminée avec succès');
+                    location.reload(true);
+                },
+                error: function( data ) {
+                    alert( data.error );
+                }
+            });
+        });
+        
+        $('#circ_request-warehouse .cancel-wr').click(function() {
+            var notes = prompt('Raison de l\'annulation :');
+            if (notes != '') {
+                var id = $(this).attr('data-id');
+                $.ajax({
+                    type: "POST",
+                    url: "/api/v1/contrib/wrm/update_status",
+                    data: {
+                        id: id,
+                        action: 'cancel',
+                        notes: notes,
+                    },
+                    success: function() {
+                        alert('La demande a été annulée avec succès');
+                        location.reload(true);
+                    },
+                    error: function( data ) {
+                        alert( data.error );
+                    }
+                });
+            }
+        });
+        
+        $('#current-warehouse-requests-table').dataTable($.extend(true, {}, dataTablesDefaults, {
+            "sDom": 't',
+            "aaSorting": [[ 2, "desc" ]],
+            "bPaginate": false
+        }));
+    });
+    // ]]>
+</script>
+</head>
+<body id="circ_request-warehouse" class="circ">
+    [% INCLUDE 'header.inc' %]
+    [% INCLUDE 'circ-search.inc' %]
+    <div id="breadcrumbs">
+        <a href="/cgi-bin/koha/mainpage.pl">Accueil</a>
+        &rsaquo;
+        <a href="/cgi-bin/koha/catalogue/search.pl">Catalogue</a>
+        &rsaquo;
+        <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% biblionumber %]">[% biblio.title | html %]</a>
+        &rsaquo; Demande magasin
+    </div>
+    <div id="doc3" class="yui-t2">
+        <div id="bd">
+            <div id="yui-main">
+                <div class="yui-b">
+                    <h1>Demande magasin depuis <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% biblio.id %]">[% biblio.title | html %]</a></h1>
+                    [% IF no_patrons_found %]
+                        <div class="dialog alert">
+                            <h3>Usager non trouvé</h3>
+                            <p>Attention, aucun adhérent avec ce nom, merci d'en essayer un autre</p>
+                        </div>
+                    [% ELSIF patrons %]
+                        <form id="warehouse_request_patron_results" method="post">
+                            <fieldset>
+                                <table id="table_borrowers">
+                                    <thead>
+                                        <tr>
+                                            <th></th>
+                                            <th>Nom</th>
+                                            <th>Numéro de carte</th>
+                                            <th>Catégorie</th>
+                                            <th>Site</th>
+                                            <th>Adresse</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        [% FOREACH patron IN patrons %]
+                                        <tr>
+                                            <td><input type="radio" name="patron_id" value="[% patron.borrowernumber %]"/></td>
+                                            <td>[% patron.surname %], [% patron.firstname %]</td>
+                                            <td>[% patron.cardnumber %]</td>
+                                            <td>[% patron.categorycode %]</td>
+                                            <td>[% patron.branchcode %]</td>
+                                            <td>[% patron.address %]</td>
+                                        </tr>
+                                        [% END %]
+                                    </tbody>
+                                </table>
+                                <input type="hidden" name="biblionumber" value="[% biblionumber %]" />
+                                <input type="hidden" name="class" value="Koha::Plugin::Fr::UnivRennes2::WRM" />
+                                <input type="hidden" name="method" value="tool" />
+                                <input type="hidden" name="op" value="creation" />
+                                <fieldset class="action"><input value="Sélectionner" type="submit" /></fieldset>
+                            </fieldset>
+                        </form>
+                    [% ELSIF !patron %]
+                        <form id="warehouse_requests_patronsearch" method="post">
+                            <fieldset class="brief">
+                                <label for="patron">Adhérent&nbsp;: </label>
+                                <div class="hint">Entrer le n° de carte d'adhérent ou une partie du nom&nbsp;:</div>
+                                <input type="text" size="40" id="patron" class="focus" name="patron_cardnumber" />
+                                <input type="submit" value="Rechercher" />
+                                <input type="hidden" name="biblionumber" value="[% biblio.id %]" />
+                                <input type="hidden" name="class" value="Koha::Plugin::Fr::UnivRennes2::WRM" />
+                                <input type="hidden" name="method" value="tool" />
+                                <input type="hidden" name="op" value="creation" />
+                            </fieldset>
+                        </form>
+                    [% ELSE %]
+                        [% IF ( expiry || patron.is_debarred ) %]
+                            <div class="dialog message">
+                                <ul>
+                                    [% IF ( expiry ) %]
+                                        <li><a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% patron.borrowernumber | uri %]">[% patron.firstname | html %] [% patron.surname | html %]</a>: <strong>Le compte a expiré</strong></li>
+                                    [% END %]
+                                    [% IF patron.is_debarred %]
+                                        <li><a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% patron.borrowernumber | uri %]#reldebarments">[% patron.firstname | html %] [% patron.surname | html %]</a>: <strong>L'adhérent est suspendu</strong></li>
+                                    [% END %]
+                                </ul>
+                            </div>
+                        [% END %]
+                        
+                        [% IF items.size %]
+                            <form id="place-warehouse-request" method="post" action="">
+                                <input type="hidden" name="class" value="Koha::Plugin::Fr::UnivRennes2::WRM" />
+                                <input type="hidden" name="method" value="tool" />
+                                <input type="hidden" name="op" value="creation" />
+                                <input type="hidden" name="action" value="create" />
+                                <input type="hidden" name="biblionumber" id="biblionumber" value="[% biblio.biblionumber %]" />
+                                <input type="hidden" name="borrowernumber" id="borrowernumber" value="[% patron.id %]" />
+                                <fieldset class="rows">
+                                    <legend>Demander un document de [% biblio.title %] pour [% patron.firstname %] [% patron.surname %] ( [% patron.cardnumber %] )</legend>
+                                    <p/>
+                                    <ul>
+                                        [% IF biblio.itemtype == 'REVUE' %]
+                                            <li>
+                                                <label for="volume">Volume(s)&nbsp;:</label>
+                                                <input type="text" name="volume" id="volume" size="50"/>
+                                            </li>
+                                            <li>
+                                                <label for="issue">Numéro(s)&nbsp;:</label>
+                                                <input type="text" name="issue" id="issue" size="50"/>
+                                            </li>
+                                            <li>
+                                                <label for="date">Date&nbsp;:</label>
+                                                <input type="text" name="date" id="date" size="50"/>
+                                            </li>
+                                        [% END %]
+                                        <li>
+                                            <label for="patron_name">Nom, Pr&eacute;nom et contact si lecteur de passage&nbsp;:</label>
+                                            <input type="text" name="patron_name" id="patron_name" size="50"/>
+                                        </li>
+                                        <li>
+                                            <label for="patron_notes">Autre information :</label>
+                                            <input type="text" name="patron_notes" id="patron_notes" size="50"/>
+                                        </li>
+                                        <li>
+                                            <label for="branchcode">Bibliothèque de retrait&nbsp;:</label>
+                                            <select name="branchcode" id="branchcode">
+                                                [% FOREACH b IN Branches.all %]
+                                                    [% IF b.branchcode == Branches.GetLoggedInBranchcode %]
+                                                        <option value="[% b.branchcode %]" selected="selected">[% b.branchname %]</option>
+                                                    [% ELSE %]
+                                                        <option value="[% b.branchcode %]">[% b.branchname %]</option>
+                                                    [% END %]
+                                                [% END %]
+                                            </select>
+                                        </li>
+                                    </ul>
+                                </fieldset>
+                                <table id="current-requests-table" class="wr-table table table-bordered table-striped">
+                                    <caption>Sélectionner un exemplaire&nbsp;:</caption>
+                                    <thead>
+                                        <tr>
+                                            <th>&nbsp;</th>
+                                            <th>Type de document</th>
+                                            <th>Code à barres</th>
+                                            <th>Site de rattachement</th>
+                                            <th>Localisation</th>
+                                            <th>Cote</th>
+                                            <th>Tomaison</th>
+                                            <th>Information</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        [% FOREACH item IN items %]
+                                            <tr>
+                                                <td>
+                                                    [% IF !checked %]
+                                                        [% SET checked = 1 %]
+                                                        <input type="radio" name="itemnumber" value="[% item.itemnumber %]" checked="checked" />
+                                                    [% ELSE %]
+                                                        <input type="radio" name="itemnumber" value="[% item.itemnumber %]" />
+                                                    [% END %]
+                                                </td>
+                                                <td>
+                                                    [% ItemTypes.GetDescription( item.itype ) %]
+                                                </td>
+                                                <td>
+                                                    [% item.barcode %]
+                                                </td>
+                                                <td>
+                                                    [% Branches.GetName( item.homebranch ) %]
+                                                </td>
+                                                <td>
+                                                    [% AuthorisedValues.GetByCode( 'LOC', item.location ) | html %]
+                                                </td>
+                                                <td>
+                                                    [% item.itemcallnumber %]
+                                                </td>
+                                                <td>
+                                                    [% item.enumchron %]
+                                                </td>
+                                                <td>
+                                                    [% IF ( item.onloan ) %]
+                                                        <span title="[% item.onloan %]" class="checkedout">Retour le [% item.onloan | $KohaDates as_due_date => 1 %]</span>
+                                                    [% END %]
+                                                    [% IF ( item.notforloan ) %]
+                                                        [% AuthorisedValues.GetByCode( 'ETAT', item.notforloan ) | html %]
+                                                    [% END %]
+                                                    [% IF ( item.itemlost ) %]
+                                                        <span class="lost">Indisponible (perdu)</span>
+                                                    [% END %]
+                                                    [% IF ( item.withdrawn ) %]
+                                                        <span class="wdn">Retiré des collections</span>
+                                                    [% END %]
+                                                    [% IF ( item.damaged ) %]
+                                                        <br />Endommagé
+                                                    [% END %]
+                                                </td>
+                                            </tr>
+                                        [% END %]
+                                    </tbody>
+                                </table>
+                                <p>
+                                    <input type="submit" value="Faire une demande" class="btn" />
+                                </p>
+                            </form>
+                        [% ELSE %]
+                            <div class="dialog message">Aucun exmeplaire n'est disponible pour une demande magasin</div>
+                        [% END %]
+                    [% END %]
+                    [% IF requests && !patron %]
+                        <fieldset class="rows left" id="current-warehouse-requests-fieldset">
+                            <legend>Demandes magasin en cours</legend>
+                            <table id="current-warehouse-requests-table">
+                                <thead>
+                                    <tr>
+                                        <th>Adhérent</th>
+                                        <th>Informations complémentaires</th>
+                                        <th>Demandé le</th>
+                                        <th>A retirer avant le</th>
+                                        <th>Message</th>
+                                        <th>Statut</th>
+                                        <th>Site de retrait</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                </tbody>
+                                [% FOREACH ar IN requests %]
+                                    <tr>
+                                        <td>
+                                            <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% ar.borrowernumber %]">[% ar.borrower.firstname %] [% ar.borrower.surname %]</a>
+                                            [% IF ar.patron_name %]<br />[% ar.patron_name %][% END %]  
+                                        </td>
+                                        <td>
+                                            [% IF ar.item %]
+                                                <a href="/cgi-bin/koha/catalogue/moredetail.pl?itemnumber=[% ar.itemnumber %]&biblionumber=[% ar.biblionumber %]"> [% ar.item.itemcallnumber %]</a>
+                                            [% END %]
+                                            [% IF ar.volume %]Volume(s) : [% ar.volume %] [% END %]
+                                            [% IF ar.issue %]Numéro(s)(s) : [% ar.issue %] [% END %]
+                                            [% IF ar.date %]Date : [% ar.date %] [% END %]
+                                        </td>
+                                        <td>[% ar.created_on | $KohaDates with_hours => 1 %]</td>
+                                        <td>[% ar.deadline | $KohaDates %]</td>
+                                        <td>[% ar.patron_notes %]</td>
+                                        <td>
+                                            [% ar.status_label %]
+                                            [% IF ar.notes %]<br/>[% ar.notes %][% END %]
+                                        </td>
+                                        <td>
+                                            [% ar.branch.branchname %]
+                                            <!--<i id="update-processing-[% ar.id %]" class="fa fa-cog fa-spin hidden"></i>
+                                            <select name="branchcode" id="branchcode-[% ar.id %]" class="wr-update-branchcode">
+                                                [% FOREACH b IN Branches.all %]
+                                                    [% IF b.branchcode == ar.branchcode %]
+                                                        <option value="[% b.branchcode %]" selected="selected">[% b.branchname %]</option>
+                                                    [% ELSE %]
+                                                        <option value="[% b.branchcode %]">[% b.branchname %]</option>
+                                                    [% END %]
+                                                [% END %]
+                                            </select>-->
+                                        </td>
+                                        <td>
+                                            [% IF ar.status != 'COMPLETED' AND ar.status != 'CANCELED' %]
+                                                <div class="btn-group">
+                                                    [% IF ar.status == 'WAITING' %]
+                                                        <a data-id="[% ar.id %]" title="Terminer la demande" class="complete-wr btn-xs btn btn-success"><i class="fa fa-fw fa-check"></i> Terminer</a>
+                                                    [% END %]
+                                                    <a data-id="[% ar.id %]" title="Annuler la demande" class="cancel-wr btn-xs btn btn-danger"><i class="fa fa-fw fa-close"></i> Annuler</a>
+                                                </div>
+                                            [% END %]
+                                        </td>
+                                    </tr>
+                                [% END %]
+                                </tbody>
+                            </table>
+                        </fieldset>
+                    [% END %]
+                </div>
+            </div>
+            <div class="yui-b">
+                [% INCLUDE 'biblio-view-menu.inc' %]
+            </div>
+        </div>
+    </div>
+    [% INCLUDE 'intranet-bottom.inc' %]

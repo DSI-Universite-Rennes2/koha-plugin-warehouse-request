@@ -169,6 +169,18 @@ sub notify {
     } 
 }
 
+=head3 status_label
+
+Returns the label version of the status
+
+=cut
+
+sub status_label {
+    my ($self) = @_;
+    
+    return Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::GetStatusLabel($self->status);
+}
+
 =head3 biblio
 
 Returns the Koha::Biblio object for this article request

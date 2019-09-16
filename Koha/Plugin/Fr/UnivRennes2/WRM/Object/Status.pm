@@ -39,6 +39,18 @@ sub Canceled {
     return 'CANCELED';
 }
 
+sub GetStatusLabel {
+    my $status = shift;
+    my %labels = (
+        'PENDING'    => 'En attente',
+        'PROCESSING' => 'En traitement',
+        'WAITING'    => 'Disponible',
+        'COMPLETED'  => 'Termin&eacute;e',
+        'CANCELED'   => 'Annul&eacute;e'
+    );
+    return $labels{$status};
+}
+
 =head1 AUTHOR
 
 Gwendal Joncour <gwendal.joncour@univ-rennes2.fr>

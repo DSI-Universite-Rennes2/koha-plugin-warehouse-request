@@ -6,17 +6,24 @@ use base qw(Koha::Plugins::Base);
 
 use Mojo::JSON qw(decode_json encode_json);
 use C4::Auth;
+use Date::Calc qw(Date_to_Days);
+use C4::Utils::DataTables::Members;
 use C4::Output;
 use C4::Context;
 use C4::Koha; #GetItemTypes
 use C4::Letters;
+use C4::Members;
 use Koha::AuthorisedValue;
 use Koha::AuthorisedValues;
 use Koha::AuthorisedValueCategory;
 use Koha::AuthorisedValueCategories;
+use Koha::Biblios;
+use Koha::Database;
+use Koha::DateUtils;
+use Koha::Items;
+use Koha::Patrons;
 use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests;
 use Koha::Plugin::Fr::UnivRennes2::WRM::Object::Slip;
-use Koha::Database;
 
 ## Here we set our plugin version
 our $VERSION = '{VERSION}';
@@ -40,7 +47,8 @@ my %default_reasons = (
     'DAMAGED'  => 'Document trop abimé pour être consulté',
     'TOOLATE'  => 'Délai de mise à disposition (3 jours) dépassé',
     'ERROR'    => 'Erreur de cote',
-    'NEEDINFO' => 'Informations complémentaires requises'
+    'NEEDINFO' => 'Informations complémentaires requises',
+    'CANCELED' => 'Annulé par le lecteur'
 );
 
 sub new {
@@ -56,8 +64,12 @@ sub tool {
 
     my $query = $self->{'cgi'};
     
-    if ( defined $query->param('op') and $query->param('op') eq 'ticket' ) {
-        $self->ticket();
+    if ( defined $query->param('op') ) {
+        if ( $query->param('op') eq 'creation' ) {
+            $self->creation();
+        } elsif ( $query->param('op') eq 'ticket' ) {
+            $self->ticket();
+        }
     } else {
         my $template = $self->get_template({ file => 'templates/warehouse-requests.tt' });
     
@@ -76,6 +88,109 @@ sub tool {
         
         $self->output_html( $template->output );
     }
+}
+
+sub creation {
+    my ( $self, $args ) = @_;
+    
+    my $query = $self->{'cgi'};
+    my $template = $self->get_template({ file => 'templates/request-warehouse.tt' });
+    
+    my $expiry = 0; # flag set if patron account has expired
+    my $today = output_pref({ dt => dt_from_string, dateformat => 'iso', dateonly => 1 });
+    
+    my $action            = $query->param('action') || q{};
+    my $biblionumber      = $query->param('biblionumber');
+    my $patron_cardnumber = $query->param('patron_cardnumber');
+    my $patron_id         = $query->param('patron_id');
+    
+    my $biblio = Koha::Biblios->find($biblionumber);
+    
+    my @warehouse_locations;
+    if (my $wloc = $self->retrieve_data('warehouse_locations')) {
+        @warehouse_locations = split(',', $wloc);
+    }
+    my $criterias = {
+        biblionumber => $biblionumber,
+        location => \@warehouse_locations
+    };
+    if ($biblio->itemtype ne 'REVUE') {
+        $criterias->{itemnumber} = {
+            'NOT IN' => \"(SELECT itemnumber FROM warehouse_requests WHERE status NOT IN ('COMPLETED','CANCELED'))"
+        };
+        $criterias->{onloan} = undef
+    }
+    my @items = Koha::Items->search($criterias);
+    my $patron =
+        $patron_id         ? Koha::Patrons->find($patron_id)
+      : $patron_cardnumber ? Koha::Patrons->find( { cardnumber => $patron_cardnumber } )
+      : undef;
+    
+    if ( $action eq 'create' ) {
+        my $borrowernumber = $query->param('borrowernumber');
+        my $branchcode     = $query->param('branchcode');
+    
+        my $itemnumber   = $query->param('itemnumber')   || undef;
+        my $volume       = $query->param('volume')       || undef;
+        my $issue        = $query->param('issue')        || undef;
+        my $date         = $query->param('date')         || undef;
+        my $patron_name  = $query->param('patron_name')  || undef;
+        my $patron_notes = $query->param('patron_notes') || undef;
+    
+        my $wr =  Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequest->new({
+            borrowernumber => $borrowernumber,
+            biblionumber   => $biblio->biblionumber,
+            branchcode     => $branchcode,
+            itemnumber     => $itemnumber,
+            volume         => $volume,
+            issue          => $issue,
+            date           => $date,
+            patron_name    => $patron_name,
+            patron_notes   => $patron_notes
+        })->store();
+    }
+    
+    if ( !$patron && $patron_cardnumber ) {
+        my $results = C4::Utils::DataTables::Members::search(
+            {
+                searchmember => $patron_cardnumber,
+                dt_params    => { iDisplayLength => -1 },
+            }
+        );
+    
+        my $patrons = $results->{patrons};
+    
+        if ( scalar @$patrons == 1 ) {
+            $patron = Koha::Patrons->find( $patrons->[0]->{borrowernumber} );
+        }
+        elsif (@$patrons) {
+            $template->param( patrons => $patrons );
+        }
+        else {
+            $template->param( no_patrons_found => $patron_cardnumber );
+        }
+    }
+    
+    if ($patron) {
+        
+        my $borrower = $patron->unblessed;
+        my $expiry_date = $borrower->{dateexpiry};
+    
+        if ($expiry_date and $expiry_date ne '0000-00-00' and
+            Date_to_Days(split /-/,$today) > Date_to_Days(split /-/,$expiry_date)) {
+            $expiry = 1;
+        }
+    }
+    
+    $template->param(
+        biblio => $biblio,
+        items => \@items,
+        patron => $patron,
+        expiry => $expiry,
+        requests => scalar Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search({ biblionumber => $biblio->biblionumber, archived => 0 })
+    );
+    
+    $self->output_html( $template->output );
 }
 
 sub ticket {
@@ -103,17 +218,353 @@ sub get_days_since_archived {
     return $days_to_keep;
 }
 
+sub get_rmq_configuration {
+    my ( $self, $args ) = @_;
+    my $rmq_server = $self->retrieve_data('rmq_server') // '';
+    my $rmq_port = $self->retrieve_data('rmq_port') // '';
+    my $rmq_vhost = $self->retrieve_data('rmq_vhost') // '';
+    my $rmq_exchange = $self->retrieve_data('rmq_exchange') // '';
+    my $rmq_user = $self->retrieve_data('rmq_user') // '';
+    my $rmq_pwd = $self->retrieve_data('rmq_pwd') // '';
+    return ($rmq_server, $rmq_port, $rmq_vhost, $rmq_exchange, $rmq_user, $rmq_pwd);
+}
+
 sub get_ticket_template {
     my ( $self, $args ) = @_;
     $self->{'cgi'} = new CGI unless ( $self->{'cgi'} );
     return $self->get_template({ file => 'templates/printslip.tt' });
 }
 
-#sub opac_head {}
-#sub opac_js {}
-#sub intranet_head {}
-#sub intranet_js {}
-#sub configure {}
+sub opac_head {
+    my ( $self ) = @_;
+
+    return q|
+        <style>
+            #warehouse-requests th, #warehouse-requests .nowrap {
+                white-space: nowrap;
+            }
+        </style>
+    |;
+}
+
+sub opac_js {
+    my ( $self ) = @_;
+
+    return q@
+        <script>
+            if ($('#opac-user').length > 0) {
+                var tabs = $( '#opac-user-views' ).tabs();
+                var ul = tabs.find( 'ul' );
+                $('<li><a href="#warehouse-requests" id="wrm-tab">Demandes de document (?)</a></li>').appendTo( ul );
+                $('<div id="warehouse-requests">Chargement...</div>').appendTo( tabs );
+                tabs.tabs( "refresh" );
+                refreshWarehouseRequests();
+            }
+            
+            function refreshWarehouseRequests() {
+                $.get( "/api/v1/contrib/wrm/list", function( data ) {
+                    $('#wrm-tab').text('Demandes de document ('+data.length+')');
+                    var result =$('#warehouse-requests').empty();
+                    result.append(`
+                    <table class="table table-bordered table-striped dataTable no-footer" role="grid">
+                        <tbody>
+                        </tbody>
+                    </table>
+                    `);
+                    if (data.length > 0) {
+                        result.find('table').prepend(`
+                            <caption>Demandes de document (`+data.length+` en tout) </caption>
+                            <thead>
+                                <tr>
+                                    <th>Informations</th>
+                                    <th>Demandé le</th>
+                                    <th>A retirer avant le</th>
+                                    <th>Statut</th>
+                                    <th>Site de retrait</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                        `);
+                        for ( var i = 0 ; i < data.length ; i++ ) {
+                            console.log(data[i]);
+                            var cd = new Date(data[i].created_on);
+                            var rd = new Date(data[i].deadline);
+                            var infoBlock = '<a href="/bib/'+data[i].biblionumber+'" title="'+data[i].biblio.title+'">'+data[i].biblio.title+'</a> '+data[i].biblio.author+' <span class="label">(Seulement '+data[i].item.itemcallnumber+')</span>';
+                            var extInfoBlock = [];
+                            if (data[i].volume != '')   extInfoBlock.push('<span class="label">Volume(s) : '+data[i].volume+'</span>');
+                            if (data[i].issue != '')    extInfoBlock.push('<span class="label">Numéro(s) : '+data[i].issue+'</span>');
+                            if (data[i].date != '')     extInfoBlock.push('<span class="label">Date : '+data[i].date+'</span>');
+                            if (extInfoBlock.length > 0)    infoBlock += '<br />'+extInfoBlock.join(' | ');
+                            result.find('tbody').append(`
+                                <tr>
+                                    <td>`+infoBlock+`</td>
+                                    <td>`+cd.toLocaleDateString()+' '+cd.toLocaleTimeString()+`</td>
+                                    <td>`+rd.toLocaleDateString()+`</td>
+                                    <td class="nowrap">`+data[i].statusstr+`</td>
+                                    <td>`+data[i].branchname+`</td>
+                                    <td>`+(['CANCELED','COMPLETED'].indexOf(data[i].status) < 0 ? '<a data-id="'+data[i].id+'" class="cancel-wr btn btn-danger"><i class="fa fa-close"></i> Annuler</a>' : '')+`</td>
+                                </tr>
+                            `);
+                        }
+                        $('.cancel-wr').click(function() {
+                            if (confirm('Êtes-vous sûr(e) de vouloir annuler votre demande ?')) {
+                                var id = $(this).attr('data-id');
+                                $.post( "/api/v1/contrib/wrm/cancel/"+id , function( data ) {
+                                    alert('Votre demande a été annulée avec succès');
+                                    refreshWarehouseRequests();
+                                });
+                            }
+                        });
+                    } else {
+                        result.find('tbody').append('<tr><td>Aucune demande en cours</td></tr>');
+                    }
+                });
+            }
+        </script>
+    @;
+}
+
+sub intranet_head {
+    my ( $self ) = @_;
+
+    return q|
+        <style>
+            #warehouse-requests table {
+                width: 100%;
+            }
+            #warehouse-requests th, #warehouse-requests .nowrap {
+                white-space: nowrap;
+            }
+            #warehouse-requests .btn-danger {
+                color: white;
+            }
+        </style>
+    |;
+}
+
+sub intranet_js {
+    my ( $self ) = @_;
+
+    return q@
+        <script>
+            // Home button injection
+            if ( $('#main_intranet-main').length > 0 ) {
+                $.get({
+                    url: "/api/v1/contrib/wrm/count",
+                    cache: true,
+                    success: function( data ) {
+                        if (data.count > 0) {
+                            var wrlink  = `<div class="pending-info" id="warehouse_requests_pending">
+                                <a href="/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3AFr%3A%3AUnivRennes2%3A%3AWRM&method=tool#article-requests-processing">Demandes magasin</a>:
+                                <span class="pending-number-link">`+data.count+`</span>
+                            </div>`;
+                            if ( $('#area-pending').length > 0 ) {
+                                $('#area-pending').prepend(wrlink);
+                            } else {
+                                $('#container-main > div.row > div.col-sm-9 > div.row:last-child div.col-sm-12').append('<div id="area-pending">'+wrlink+'</div>');
+                            }
+                        }
+                    }
+                });
+            }
+            // Circ homepage button injection
+            if ( $('#circ_circulation-home').length > 0 ) {
+                var wrbutton = '<li><a class="circ-button" href="/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3AFr%3A%3AUnivRennes2%3A%3AWRM&method=tool" title="Demandes magasins"><i class="fa fa-file-text-o"></i> Demandes magasins</a></li>';
+                var requestsMenu = $('i.fa-newspaper-o').parents('ul.buttons-list');
+                if ( requestsMenu.length > 0 ) {
+                    requestsMenu.prepend(wrbutton);
+                } else {
+                    $('#circ_circulation-home div.main > div.row:first-child > div:last-child').prepend('<h3>Demandes des adhérents</h3><ul class="buttons-list">'+wrbutton+'</ul>');
+                }
+            }
+            // Member tabs table injection
+            if ( $('#circ_circulation, #pat_moremember').length > 0 ) {
+                var tabs = $( '#patronlists, #finesholdsissues' ).tabs();
+                tabs.find('ul li:last').before('<li><a href="#warehouse-requests" id="wrm-tab">? Demandes magasin</a></li>');
+                tabs.find('div:last').before('<div id="warehouse-requests">Chargement...</div>');
+                tabs.tabs( "refresh" );
+                refreshWarehouseRequests();
+            }
+            // Catalog detail link
+            let searchParams = new URLSearchParams(window.location.search);
+            $('#catalog_detail #toolbar, #catalog_moredetail #toolbar').append('<div class="btn-group"><a id="placehold" class="btn btn-default btn-sm" href="/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3AFr%3A%3AUnivRennes2%3A%3AWRM&method=tool&op=creation&biblionumber='+searchParams.get('biblionumber')+'"><i class="fa fa-file-text-o"></i> Demande magasin</a></div>');
+            if ( $('body.circ div#menu, body.catalog div#menu').length > 0 ) {
+                $('body.circ div#menu ul:first-child, body.catalog div#menu ul:first-child').append('<li><a id="wr-menu-link" href="/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3AFr%3A%3AUnivRennes2%3A%3AWRM&method=tool&op=creation&biblionumber='+searchParams.get('biblionumber')+'">Demandes magasin (?)</a></li>');
+                $.get({
+                    url: "/api/v1/contrib/wrm/count",
+                    data: { biblionumber: searchParams.get('biblionumber') },
+                    cache: true,
+                    success: function( data ) {
+                        $('#wr-menu-link').text('Demandes magasin ('+data.count+')');
+                    }
+                });
+                if ( $('#circ_request-warehouse').length > 0 ) {
+                    $('#wr-menu-link').parent().addClass('active');
+                }
+            }
+            
+            function refreshWarehouseRequests() {
+                var borrowernumber = $('.patroninfo ul li.patronborrowernumber').text().replace(/\D/g, '');
+                $.get({
+                    url: "/api/v1/contrib/wrm/list/"+borrowernumber,
+                    cache: true,
+                    success: function( data ) {
+                        $('#wrm-tab').text( data.length+' Demandes magasin');
+                        var result =$('#warehouse-requests').empty();
+                        result.append(`
+                        <table role="grid">
+                            <tbody>
+                            </tbody>
+                        </table>
+                        `);
+                        if (data.length > 0) {
+                            result.find('table').prepend(`
+                                <thead>
+                                    <tr>
+                                        <th>Informations</th>
+                                        <th>Demandé le</th>
+                                        <th>A chercher avant le</th>
+                                        <th>Statut</th>
+                                        <th>Site de retrait</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                            `);
+                            for ( var i = 0 ; i < data.length ; i++ ) {
+                                console.log(data[i]);
+                                var cd = new Date(data[i].created_on);
+                                var rd = new Date(data[i].deadline);
+                                var infoBlock = '<a class="strong" href="/bib/'+data[i].biblionumber+'" title="'+data[i].biblio.title+'">'+data[i].biblio.title+'</a> '+data[i].biblio.author+' <span class="label">(Seulement '+data[i].item.itemcallnumber+')</span>';
+                                var extInfoBlock = [];
+                                if (data[i].volume != '')   extInfoBlock.push('<span class="label">Volume(s) : '+data[i].volume+'</span>');
+                                if (data[i].issue != '')    extInfoBlock.push('<span class="label">Numéro(s) : '+data[i].issue+'</span>');
+                                if (data[i].date != '')     extInfoBlock.push('<span class="label">Date : '+data[i].date+'</span>');
+                                if (extInfoBlock.length > 0)    infoBlock += '<br />'+extInfoBlock.join(' | ');
+                                result.find('tbody').append(`
+                                    <tr>
+                                        <td>`+infoBlock+`</td>
+                                        <td>`+cd.toLocaleDateString()+' '+cd.toLocaleTimeString()+`</td>
+                                        <td>`+rd.toLocaleDateString()+`</td>
+                                        <td class="nowrap">`+decodeURIComponent(data[i].statusstr)+`</td>
+                                        <td>`+data[i].branchname+`</td>
+                                        <td class="text-center">`+
+                                            (['CANCELED','COMPLETED'].indexOf(data[i].status) < 0 ?
+                                                '<div class="btn-group">'+
+                                                    ( data[i].status == 'WAITING' ? '<a data-id="'+data[i].id+'" title="Terminer la demande" class="complete-wr btn-xs btn btn-success"><i class="fa fa-fw fa-check"></i> Terminer</a>' : '' )+ 
+                                                    '<a data-id="'+data[i].id+'" title="Annuler la demande" class="cancel-wr btn-xs btn btn-danger"><i class="fa fa-fw fa-close"></i> Annuler</a>'+
+                                                '</div>'
+                                            : '')
+                                        +`</td>
+                                    </tr>
+                                `);
+                            }
+                            $('#warehouse-requests table').dataTable($.extend(true, {}, dataTablesDefaults, {
+                                "sDom": 't',
+                                "aaSorting": [[ 1, "desc" ]],
+                                "aoColumnDefs": [
+                                    { "aTargets": [ -1 ], "bSortable": false, "bSearchable": false }
+                                ],
+                                "aoColumns": [
+                                    { "sType": "title-string" },{ "sType": "date" },null,null,null,null
+                                ],
+                                "bPaginate": false
+                            }));
+                            $('#circ_circulation .complete-wr, #circ_circulation .cancel-wr').click(function() {
+                                var id = $(this).attr('data-id');
+                                $.ajax({
+                                    type: "POST",
+                                    url: "/api/v1/contrib/wrm/update_status",
+                                    data: {
+                                        id: id,
+                                        action: 'complete',
+                                    },
+                                    success: function( data ) {
+                                        alert('La demande a été terminée avec succès');
+                                        refreshWarehouseRequests();
+                                    },
+                                    error: function( data ) {
+                                        alert( data.error );
+                                    }
+                                });
+                            });
+                            $('#circ_circulation .cancel-wr, #pat_moremember .cancel-wr').click(function() {
+                                var notes = prompt('Raison de l\'annulation :');
+                                if (notes != '') {
+                                    var id = $(this).attr('data-id');
+                                    $.ajax({
+                                        type: "POST",
+                                        url: "/api/v1/contrib/wrm/update_status",
+                                        data: {
+                                            id: id,
+                                            action: 'cancel',
+                                            notes: notes,
+                                        },
+                                        success: function( data ) {
+                                            alert('La demande a été annulée avec succès');
+                                            refreshWarehouseRequests();
+                                        },
+                                        error: function( data ) {
+                                            alert( data.error );
+                                        }
+                                    });
+                                }
+                            });
+                        } else {
+                            result.find('tbody').append('<tr><td>L\'adhérent n\'a pas de demandes magasin en cours.</td></tr>');
+                        }
+                    }
+                });
+            }
+        </script>
+    @;
+}
+
+sub configure {
+    my ( $self, $args ) = @_;
+    my $cgi = $self->{'cgi'};
+    
+    my $template = $self->get_template({ file => 'templates/configure.tt' });
+    if ( $cgi->param('save') ) {
+        my $myconf;
+        $myconf->{days_to_keep} = $cgi->param('days_to_keep');
+        $myconf->{days_since_archived} = $cgi->param('days_since_archived');
+        $myconf->{warehouse_locations} = join(",", $cgi->multi_param('warehouse_locations'));
+        $myconf->{rmq_server} = $cgi->param('rmq_server');
+        $myconf->{rmq_port} = $cgi->param('rmq_port');
+        $myconf->{rmq_vhost} = $cgi->param('rmq_vhost');
+        $myconf->{rmq_exchange} = $cgi->param('rmq_exchange');
+        $myconf->{rmq_user} = $cgi->param('rmq_user');
+        if ( $cgi->param('rmq_pwd') ) {
+            if ( $cgi->param('rmq_pwd_conf') && $cgi->param('rmq_pwd') eq $cgi->param('rmq_pwd_conf') ) {
+                $myconf->{rmq_pwd} = $cgi->param('rmq_pwd');
+            } else {
+                $template->param( 'config_error' => 'Les deux saisies du mot de passe RabbitMQ doivent être identiques.' );
+                $myconf = undef;
+            }
+        }
+        if ( $myconf ) {
+            $self->store_data($myconf);
+            $template->param( 'config_success' => 'La configuration du plugin a été enregistrée avec succès !' );
+        }
+    }
+    my @warehouse_locations;
+    if (my $wloc = $self->retrieve_data('warehouse_locations')) {
+        @warehouse_locations = split(',', $wloc);
+    }
+    my $locations = GetAuthorisedValues('LOC');
+    $template->param(
+        'days_to_keep' => $self->retrieve_data('days_to_keep'),
+        'days_since_archived' => $self->retrieve_data('days_since_archived'),
+        'locations' => $locations,
+        'warehouse_locations' => \@warehouse_locations,
+        'rmq_server' => $self->retrieve_data('rmq_server'),
+        'rmq_port' => $self->retrieve_data('rmq_port'),
+        'rmq_vhost' => $self->retrieve_data('rmq_vhost'),
+        'rmq_exchange' => $self->retrieve_data('rmq_exchange'),
+        'rmq_user' => $self->retrieve_data('rmq_user')
+    );
+    $self->output_html( $template->output() );
+}
 
 sub install {
     my ( $self, $args ) = @_;

@@ -9,9 +9,41 @@
             "type": "integer",
             "description": "Internal item identifier"
         },
+        "item": {
+            "type": "object",
+            "description": "Item informations of the document",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "Location of the requested item"
+                },
+                "itemcallnumber": {
+                    "type": "string",
+                    "description": "Callnumber of the requested item"
+                }
+            }
+        },
+        "biblio": {
+            "type": "object",
+            "description": "Biblio informations of the document",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Title of the requested item"
+                },
+                "author": {
+                    "type": "string",
+                    "description": "Author of the requested item"
+                }
+            }
+        },
         "branchcode": {
             "type": "string",
             "description": "Internal library identifier"
+        },
+        "branchname": {
+            "type": "string",
+            "description": "Label ot the library"
         },
         "volume": {
             "type": ["string", "null"],
@@ -43,6 +75,10 @@
                 "CANCELED"
             ],
             "description": "Status of the request"
+        },
+        "statusstr": {
+            "type": "string",
+            "description": "Labeled version of the request's status"
         },
         "created_on": {
             "type": "string",

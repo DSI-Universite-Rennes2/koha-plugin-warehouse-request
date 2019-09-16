@@ -112,6 +112,21 @@ sub to_archive {
     });
 }
 
+=head3 archived_since
+
+=cut
+
+sub arched_since {
+    my ( $self, $since ) = @_;
+    my $date = dt_from_string();
+    $date->subtract( days => $since );
+    my $dtf = Koha::Database->new->schema->storage->datetime_parser;
+    return Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search({
+        archived => 1,
+        updated_on => { '<=' => $dtf->format_date($date) }
+    });
+}
+
 =head3 _type
 
 =cut

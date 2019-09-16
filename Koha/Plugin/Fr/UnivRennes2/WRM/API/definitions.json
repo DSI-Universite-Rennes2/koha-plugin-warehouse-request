@@ -1,0 +1,8 @@
+{
+    "warehouse_request": {
+        "$ref": "http://cataloguetest.bu.univ-rennes2.fr/plugin/Koha/Plugin/Fr/UnivRennes2/WRM/API/definitions/warehouse_request.json"
+    },
+    "warehouse_requests": {
+        "$ref": "http://cataloguetest.bu.univ-rennes2.fr/plugin/Koha/Plugin/Fr/UnivRennes2/WRM/API/definitions/warehouse_requests.json"
+    }
+}

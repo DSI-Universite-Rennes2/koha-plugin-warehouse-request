@@ -21,13 +21,21 @@
                { "sType": "ar-title", "aTargets" : [ "ar-title" ] }
             ],
             "aaSorting": [[ 7, 'desc' ]],
-            "sPaginationType": "four_button"
+            "sPaginationType": "four_button",
+            "autoWidth": false
          }));
       });
    //]]>
 </script>
 <style type="text/css">
-   #article-requests-waiting-table .ar-waiting .ar-date span.toolate {
+   #article-request-tabs table {
+      width: 100%;
+   }
+   .ar-date {
+      white-space: nowrap;
+      text-align: right;
+   }
+   #article-requests-waiting-table .ar-waiting .ar-date .toolate {
       color: tomato;
       font-weight: 700;
    }
@@ -59,26 +67,6 @@
             
             [% IF warehouse_requests_pending.count %]
                $(".ar-pending-none").hide();
-            [% END %]
-            
-            [% IF warehouse_requests_processing.count %]
-               $(".ar-processing-none").hide();
-            [% END %]
-            
-            [% IF warehouse_requests_waiting.count %]
-               $(".ar-waiting-none").hide();
-            [% END %]
-            
-            [% IF warehouse_requests_canceled.count %]
-               $(".ar-canceled-none").hide();
-            [% END %]
-            
-            [% IF warehouse_requests_completed.count %]
-               $(".ar-completed-none").hide();
-            [% END %]
-            
-            
-            [% FOREACH ar IN warehouse_requests_pending %]
                $("#CheckAllarticle-requests-pending").click(function(e){
                   $("#article-requests-pending-table").checkCheckboxes();
                   e.preventDefault();
@@ -86,9 +74,11 @@
                $("#UncheckAllarticle-requests-pending").click(function(e){
                   $("#article-requests-pending-table").unCheckCheckboxes();
                   e.preventDefault();
-               });              
+               });   
             [% END %]
-            [% FOREACH ar IN warehouse_requests_processing %]
+            
+            [% IF warehouse_requests_processing.count %]
+               $(".ar-processing-none").hide();
                $("#CheckAllarticle-requests-processing").click(function(e){
                   $("#article-requests-processing-table").checkCheckboxes();
                   e.preventDefault();
@@ -103,9 +93,11 @@
                      $(this).hide();
                      $("#other_reason-ar-processing").show();
                   }
-               });              
+               });
             [% END %]
-            [% FOREACH ar IN warehouse_requests_waiting %]
+            
+            [% IF warehouse_requests_waiting.count %]
+               $(".ar-waiting-none").hide();
                $("#CheckAllarticle-requests-waiting").click(function(e){
                   $("#article-requests-waiting-table").checkCheckboxes();
                   e.preventDefault();
@@ -120,8 +112,17 @@
                      $(this).hide();
                      $("#other_reason-ar-waiting").show();
                   }
-               });               
-            [% END %]   
+               }); 
+            [% END %]
+            
+            [% IF warehouse_requests_canceled.count %]
+               $(".ar-canceled-none").hide();
+            [% END %]
+            
+            [% IF warehouse_requests_completed.count %]
+               $(".ar-completed-none").hide();
+            [% END %]
+            
             $("a[href*=back]").click(function(){
                var sid = $(this).attr("href").replace(/#back/,"");
                $("#reason"+sid).show().find("option[value='']").attr("selected","selected");
@@ -164,8 +165,9 @@
                               alert("La requête n'a pu aboutir.");
                            };
                         },
-                        error: function (jqXHR, textStatus, errorThrown) {
-                           alert("La requête n'a pu aboutir");
+                        error: function ( jqXHR, textStatus, errorThrown ) {
+                           var data = JSON.parse( jqXHR.responseText );
+                           alert( $("<div/>").html(data.error).text() );
                         }
                      });
                   }
@@ -215,7 +217,7 @@
          }
          
          function PrintSlip(link) {
-            window.open(link, 'popup', 'width=600,height=400,resizable=1,toolbar=0,scrollbars=1,top');
+            window.open(link);
          }
          
          function Cancel( id, a ) {
@@ -411,20 +413,20 @@
                      <p>There are no pending article requests at this time.</p>
                   </div>
                   <p><a id="CheckAllarticle-requests-pending" href="#">Tout sélectionner</a> | <a id="UncheckAllarticle-requests-pending" href="#">Tout désélectionner</a></p>
-                  <form id="f-ar-pending" name="f-ar-pending" method="post" class="ar-form" action="/cgi-bin/koha/circ/article-requests.pl#article-requests-pending">
+                  <form id="f-ar-pending" name="f-ar-pending" method="post" class="ar-form" action="">
                      <input type="hidden" name="type" value="manual"/>
                      <input type="hidden" name="reqtype" value="pending"/>
                      <table id="article-requests-pending-table">
                         <thead>
                            <tr>
                               <th class="ar-id">N°</th>
-                              <th class="ar-title">Titre</th>
+                              <th class="ar-title">Notice</th>
                               <th class="ar-request">Informations complémentaires</th>
                               <th class="ar-itemtype">Type de document</th>
                               <th class="ar-callnumber">Cote</th>
                               <th class="ar-barcode">Code à barres</th>
                               <th class="ar-patron">Adhérent</th>
-                              <th class="ar-date">Date</th>
+                              <th class="ar-date">Dates</th>
                               <!-- <th class="ar-actions">Actions</th> -->
                            </tr>
                         </thead>
@@ -450,12 +452,6 @@
                                  </p>
                               </td>
                               <td class="ar-request">
-                                 [% IF ar.title %] 
-                                 <p><strong>Titre&nbsp;:</strong> [% ar.title %] </p>
-                                 [% END %]
-                                 [% IF ar.author %] 
-                                 <p><strong>Auteur&nbsp;:</strong> [% ar.author %] </p>
-                                 [% END %]
                                  [% IF ar.volume %] 
                                  <p><strong>Volume(s)&nbsp;:</strong> [% ar.volume %] </p>
                                  [% END %]
@@ -465,14 +461,8 @@
                                  [% IF ar.date %] 
                                  <p><strong>Date&nbsp;:</strong> [% ar.date %] </p>
                                  [% END %]
-                                 [% IF ar.pages %] 
-                                 <p><strong>Pages&nbsp;:</strong> [% ar.pages %] </p>
-                                 [% END %]
-                                 [% IF ar.chapters %] 
-                                 <p><strong>Chapitres&nbsp;:</strong> [% ar.chapters %] </p>
-                                 [% END %]
                                  [% IF ar.patron_notes %] 
-                                 <p><strong>Autre information <br />(Nom, Pr&eacute;nom et contact si lecteur de passage)&nbsp;:</strong> [% ar.patron_notes %] </p>
+                                 <p><strong>Autre information&nbsp;:</strong> [% ar.patron_notes %] </p>
                                  [% END %]
                               </td>
                               <td class="ar-itemtype">[% ItemTypes.GetDescription( ar.item.effective_itemtype ) %]</td>
@@ -485,13 +475,17 @@
                               <td class="ar-barcode">[% ar.item.barcode %]</td>
                               <td class="ar-patron">
                                  <p>
-                                    <a href="/cgi-bin/koha/circ/circulation.pl?findborrower=[% ar.borrower.cardnumber %]">
+                                    <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% ar.borrower.borrowernumber %]">
                                     [% ar.borrower.surname %][% IF ar.borrower.firstname %], [% ar.borrower.firstname %][% END %]
                                     </a>
                                  </p>
-                                 <p>[% ar.borrower.phone %]</p>
+                                 [% IF ar.patron_name %]<p>[% ar.patron_name %]</p>[% END %]
+                                 [% IF ar.borrower.phone %]<p>[% ar.borrower.phone %]</p>[% END %]
                               </td>
-                              <td class="ar-date"><span title="[% ar.created_on %]">[% ar.created_on | $KohaDates %]</span></td>
+                              <td class="ar-date">
+                                 <div>Création : [% ar.created_on | $KohaDates with_hours => 1 %]</div>
+                                 <div>Mise à jour : [% ar.updated_on | $KohaDates with_hours => 1 %]</div>
+                              </td>
                               <!-- 
                                  <td class="ar-actions">
                                  <div class="dropdown">
@@ -536,20 +530,20 @@
                      </p>
                   </div>
                   <p><a id="CheckAllarticle-requests-processing" href="#">Tout sélectionner</a> | <a id="UncheckAllarticle-requests-processing" href="#">Tout désélectionner</a></p>
-                  <form id="f-ar-processing" name="f-ar-processing" class="ar-form" method="post" action="/cgi-bin/koha/circ/article-requests.pl#article-requests-processing">
+                  <form id="f-ar-processing" name="f-ar-processing" class="ar-form" method="post" action="">
                      <input type="hidden" name="type" value="manual"/>
                      <input type="hidden" name="reqtype" value="processing"/>
                      <table id="article-requests-processing-table">
                         <thead>
                            <tr>
                               <th class="ar-id">N°</th>
-                              <th class="ar-title">Titre</th>
+                              <th class="ar-title">Notice</th>
                               <th class="ar-request">Informations complémentaires</th>
                               <th class="ar-itemtype">Type de document</th>
                               <th class="ar-callnumber">Cote</th>
                               <th class="ar-barcode">Code à barres</th>
                               <th class="ar-patron">Adhérent</th>
-                              <th class="ar-date">Date</th>
+                              <th class="ar-date">Dates</th>
                               <th class="ar-actions">Actions</th>
                            </tr>
                         </thead>
@@ -575,12 +569,6 @@
                                  </p>
                               </td>
                               <td class="ar-request">
-                                 [% IF ar.title %] 
-                                 <p><strong>Titre&nbsp;:</strong> [% ar.title %] </p>
-                                 [% END %]
-                                 [% IF ar.author %] 
-                                 <p><strong>Auteur&nbsp;:</strong> [% ar.author %] </p>
-                                 [% END %]
                                  [% IF ar.volume %] 
                                  <p><strong>Volume(s)&nbsp;:</strong> [% ar.volume %] </p>
                                  [% END %]
@@ -590,14 +578,8 @@
                                  [% IF ar.date %] 
                                  <p><strong>Date&nbsp;:</strong> [% ar.date %] </p>
                                  [% END %]
-                                 [% IF ar.pages %] 
-                                 <p><strong>Pages&nbsp;:</strong> [% ar.pages %] </p>
-                                 [% END %]
-                                 [% IF ar.chapters %] 
-                                 <p><strong>Chapitres&nbsp;:</strong> [% ar.chapters %] </p>
-                                 [% END %]
                                  [% IF ar.patron_notes %] 
-                                 <p><strong>Autre information <br />(Nom, Pr&eacute;nom et contact si lecteur de passage)&nbsp;:</strong> [% ar.patron_notes %] </p>
+                                 <p><strong>Autre information&nbsp;:</strong> [% ar.patron_notes %] </p>
                                  [% END %]
                               </td>
                               <td class="ar-itemtype">[% ItemTypes.GetDescription( ar.item.effective_itemtype ) %]</td>
@@ -610,13 +592,17 @@
                               <td class="ar-barcode">[% ar.item.barcode %]</td>
                               <td class="ar-patron">
                                  <p>
-                                    <a href="/cgi-bin/koha/circ/circulation.pl?findborrower=[% ar.borrower.cardnumber %]">
+                                    <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% ar.borrower.borrowernumber %]">
                                     [% ar.borrower.surname %][% IF ar.borrower.firstname %], [% ar.borrower.firstname %][% END %] 
                                     </a>
                                  </p>
-                                 <p>[% ar.borrower.phone %]</p>
+                                 [% IF ar.patron_name %]<p>[% ar.patron_name %]</p>[% END %]
+                                 [% IF ar.borrower.phone %]<p>[% ar.borrower.phone %]</p>[% END %]
                               </td>
-                              <td class="ar-date"><span title="[% ar.updated_on %]">[% ar.updated_on | $KohaDates %]</span></td>
+                              <td class="ar-date">
+                                 <div>Création : [% ar.created_on | $KohaDates with_hours => 1 %]</div>
+                                 <div>Mise à jour : [% ar.updated_on | $KohaDates with_hours => 1 %]</div>
+                              </td>
                               <td class="ar-actions">
                                  <a class="ar-print-request btn btn-xs" href="#" id="[% ar.id %]">
                                     <i class="fa fa-print"></i> Imprimer
@@ -661,7 +647,7 @@
                         There are no article requests in waiting at this time.
                      </p>
                   </div>
-                  <form id="f-ar-article-requests-waiting" name="f-ar-article-requests-waiting" class="ar-form" method="post" action="/cgi-bin/koha/circ/article-requests.pl#article-requests-waiting" autocomplete="off" >
+                  <form id="f-ar-article-requests-waiting" name="f-ar-article-requests-waiting" class="ar-form" method="post" action="" autocomplete="off" >
                      <input type="hidden" name="type" value="scan"/>
                      <input type="hidden" name="reqtype" value="article-requests-waiting"/>
                      <input type="hidden" name="action" id="action" value="wait"/>
@@ -672,7 +658,7 @@
                         <input type="submit" value="Valider" />
                      </fieldset>
                   </form>
-                  <form id="f-ar-waiting" name="f-ar-waiting" class="ar-form" method="post" action="/cgi-bin/koha/circ/article-requests.pl#article-requests-waiting">
+                  <form id="f-ar-waiting" name="f-ar-waiting" class="ar-form" method="post" action="">
                      <input type="hidden" name="type" value="manual"/>
                      <input type="hidden" name="reqtype" value="waiting"/>
                      <p><a id="CheckAllarticle-requests-waiting" href="#">Tout sélectionner</a> | <a id="UncheckAllarticle-requests-waiting" href="#">Tout désélectionner</a></p>
@@ -680,13 +666,13 @@
                         <thead>
                            <tr>
                               <th class="ar-id">N°</th>
-                              <th class="ar-title">Titre</th>
+                              <th class="ar-title">Notice</th>
                               <th class="ar-request">Informations complémentaires</th>
                               <th class="ar-itemtype">Type de document</th>
                               <th class="ar-callnumber">Cote</th>
                               <th class="ar-barcode">Code à barres</th>
                               <th class="ar-patron">Adhérent</th>
-                              <th class="ar-date">Date</th>
+                              <th class="ar-date">Dates</th>
                               <th class="ar-actions">Actions</th>
                            </tr>
                         </thead>
@@ -712,12 +698,6 @@
                                  </p>
                               </td>
                               <td class="ar-request">
-                                 [% IF ar.title %] 
-                                 <p><strong>Titre&nbsp;:</strong> [% ar.title %] </p>
-                                 [% END %]
-                                 [% IF ar.author %] 
-                                 <p><strong>Auteur&nbsp;:</strong> [% ar.author %] </p>
-                                 [% END %]
                                  [% IF ar.volume %] 
                                  <p><strong>Volume(s)&nbsp;:</strong> [% ar.volume %] </p>
                                  [% END %]
@@ -727,14 +707,8 @@
                                  [% IF ar.date %] 
                                  <p><strong>Date&nbsp;:</strong> [% ar.date %] </p>
                                  [% END %]
-                                 [% IF ar.pages %] 
-                                 <p><strong>Pages&nbsp;:</strong> [% ar.pages %] </p>
-                                 [% END %]
-                                 [% IF ar.chapters %] 
-                                 <p><strong>Chapitres&nbsp;:</strong> [% ar.chapters %] </p>
-                                 [% END %]
                                  [% IF ar.patron_notes %] 
-                                 <p><strong>Autre information <br />(Nom, Pr&eacute;nom et contact si lecteur de passage)&nbsp;:</strong> [% ar.patron_notes %] </p>
+                                 <p><strong>Autre information&nbsp;:</strong> [% ar.patron_notes %] </p>
                                  [% END %]
                               </td>
                               <td class="ar-itemtype">[% ItemTypes.GetDescription( ar.item.effective_itemtype ) %]</td>
@@ -747,18 +721,22 @@
                               <td class="ar-barcode">[% ar.item.barcode %]</td>
                               <td class="ar-patron">
                                  <p>
-                                    <a href="/cgi-bin/koha/circ/circulation.pl?findborrower=[% ar.borrower.cardnumber %]">
+                                    <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% ar.borrower.borrowernumber %]">
                                     [% ar.borrower.surname %][% IF ar.borrower.firstname %], [% ar.borrower.firstname %][% END %] 
                                     </a>
                                  </p>
-                                 <p>[% ar.borrower.phone %]</p>
+                                 [% IF ar.patron_name %]<p>[% ar.patron_name %]</p>[% END %]
+                                 [% IF ar.borrower.phone %]<p>[% ar.borrower.phone %]</p>[% END %]
                               </td>
                               <td class="ar-date">
+                                 <div>Création : [% ar.created_on | $KohaDates with_hours => 1 %]</div>
+                                 <div>Mise à jour : [% ar.updated_on | $KohaDates with_hours => 1 %]</div>
                                  [% IF date.format( date.now, '%Y%m%d' ) > date.format( ar.deadline, '%Y%m%d' ) %]
-                                    <span title="[% ar.updated_on %]" class="toolate">[% ar.updated_on | $KohaDates %]</span>
+                                    <div class="toolate">
                                  [% ELSE %]
-                                    <span title="[% ar.updated_on %]">[% ar.updated_on | $KohaDates %]</span>
+                                    <div>
                                  [% END %]
+                                 A chercher avant le : [% ar.deadline | $KohaDates %]</div>
                               </td>
                               <td class="ar-actions">
                                  <a class="ar-print-request btn btn-xs" href="#" id="[% ar.id %]">
@@ -804,7 +782,7 @@
                         There are no completed article requests at this time.
                      </p>
                   </div>
-                  <form id="f-ar-article-requests-completed" name="f-ar-article-requests-completed" class="ar-form" method="post" action="/cgi-bin/koha/circ/article-requests.pl#article-requests-completed" autocomplete="off" >
+                  <form id="f-ar-article-requests-completed" name="f-ar-article-requests-completed" class="ar-form" method="post" action="" autocomplete="off" >
                      <input type="hidden" name="type" value="scan"/>
                      <input type="hidden" name="reqtype" value="article-requests-completed"/>
                      <input type="hidden" name="action" id="action" value="complete"/>
@@ -819,13 +797,13 @@
                      <thead>
                         <tr>
                            <th class="ar-id">N°</th>
-                           <th class="ar-title">Titre</th>
+                           <th class="ar-title">Notice</th>
                            <th class="ar-request">Informations complémentaires</th>
                            <th class="ar-itemtype">Type de document</th>
                            <th class="ar-callnumber">Cote</th>
                            <th class="ar-barcode">Code à barres</th>
                            <th class="ar-patron">Adhérent</th>
-                           <th class="ar-date">Date</th>
+                           <th class="ar-date">Dates</th>
                            <th class="ar-actions">Actions</th>
                         </tr>
                      </thead>
@@ -851,12 +829,6 @@
                               </p>
                            </td>
                            <td class="ar-request">
-                              [% IF ar.title %] 
-                              <p><strong>Titre&nbsp;:</strong> [% ar.title %] </p>
-                              [% END %]
-                              [% IF ar.author %] 
-                              <p><strong>Auteur&nbsp;:</strong> [% ar.author %] </p>
-                              [% END %]
                               [% IF ar.volume %] 
                               <p><strong>Volume(s)&nbsp;:</strong> [% ar.volume %] </p>
                               [% END %]
@@ -866,14 +838,8 @@
                               [% IF ar.date %] 
                               <p><strong>Date&nbsp;:</strong> [% ar.date %] </p>
                               [% END %]
-                              [% IF ar.pages %] 
-                              <p><strong>Pages&nbsp;:</strong> [% ar.pages %] </p>
-                              [% END %]
-                              [% IF ar.chapters %] 
-                              <p><strong>Chapitres&nbsp;:</strong> [% ar.chapters %] </p>
-                              [% END %]
                               [% IF ar.patron_notes %] 
-                              <p><strong>Autre information <br />(Nom, Pr&eacute;nom et contact si lecteur de passage)&nbsp;:</strong> [% ar.patron_notes %] </p>
+                              <p><strong>Autre information&nbsp;:</strong> [% ar.patron_notes %] </p>
                               [% END %]
                            </td>
                            <td class="ar-itemtype">[% ItemTypes.GetDescription( ar.item.effective_itemtype ) %]</td>
@@ -886,13 +852,17 @@
                            <td class="ar-barcode">[% ar.item.barcode %]</td>
                            <td class="ar-patron">
                               <p>
-                                 <a href="/cgi-bin/koha/circ/circulation.pl?findborrower=[% ar.borrower.cardnumber %]">
+                                 <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% ar.borrower.borrowernumber %]">
                                  [% ar.borrower.surname %][% IF ar.borrower.firstname %], [% ar.borrower.firstname %][% END %] 
                                  </a>
                               </p>
-                              <p>[% ar.borrower.phone %]</p>
+                              [% IF ar.patron_name %]<p>[% ar.patron_name %]</p>[% END %]
+                              [% IF ar.borrower.phone %]<p>[% ar.borrower.phone %]</p>[% END %]
                            </td>
-                           <td class="ar-date"><span title="[% ar.updated_on %]">[% ar.updated_on | $KohaDates %]</span></td>
+                           <td class="ar-date">
+                              <div>Création : [% ar.created_on | $KohaDates with_hours => 1 %]</div>
+                              <div>Mise à jour : [% ar.updated_on | $KohaDates with_hours => 1 %]</div>
+                           </td>
                            <td class="ar-actions">
                               <a class="ar-print-request btn btn-xs" href="#" id="[% ar.id %]">
                                  <i class="fa fa-print"></i> Imprimer
@@ -913,13 +883,13 @@
                      <thead>
                         <tr>
                            <th class="ar-id">N°</th>
-                           <th class="ar-title">Titre</th>
+                           <th class="ar-title">Notice</th>
                            <th class="ar-request">Informations complémentaires</th>
                            <th class="ar-itemtype">Type de document</th>
                            <th class="ar-callnumber">Cote</th>
                            <th class="ar-barcode">Code à barres</th>
                            <th class="ar-patron">Adhérent</th>
-                           <th class="ar-date">Date</th>
+                           <th class="ar-date">Dates</th>
                            <th class="ar-notes">Motif</th>
                            <th class="ar-actions">Actions</th>
                         </tr>
@@ -946,12 +916,6 @@
                               </p>
                            </td>
                            <td class="ar-request">
-                              [% IF ar.title %] 
-                              <p><strong>Titre&nbsp;:</strong> [% ar.title %] </p>
-                              [% END %]
-                              [% IF ar.author %] 
-                              <p><strong>Auteur&nbsp;:</strong> [% ar.author %] </p>
-                              [% END %]
                               [% IF ar.volume %] 
                               <p><strong>Volume(s)&nbsp;:</strong> [% ar.volume %] </p>
                               [% END %]
@@ -961,14 +925,8 @@
                               [% IF ar.date %] 
                               <p><strong>Date&nbsp;:</strong> [% ar.date %] </p>
                               [% END %]
-                              [% IF ar.pages %] 
-                              <p><strong>Pages&nbsp;:</strong> [% ar.pages %] </p>
-                              [% END %]
-                              [% IF ar.chapters %] 
-                              <p><strong>Chapitres&nbsp;:</strong> [% ar.chapters %] </p>
-                              [% END %]
                               [% IF ar.patron_notes %] 
-                              <p><strong>Autre information <br />(Nom, Pr&eacute;nom et contact si lecteur de passage)&nbsp;:</strong> [% ar.patron_notes %] </p>
+                              <p><strong>Autre information&nbsp;:</strong> [% ar.patron_notes %] </p>
                               [% END %]
                            </td>
                            <td class="ar-itemtype">[% ItemTypes.GetDescription( ar.item.effective_itemtype ) %]</td>
@@ -981,13 +939,17 @@
                            <td class="ar-barcode">[% ar.item.barcode %]</td>
                            <td class="ar-patron">
                               <p>
-                                 <a href="/cgi-bin/koha/circ/circulation.pl?findborrower=[% ar.borrower.cardnumber %]">
+                                 <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% ar.borrower.borrowernumber %]">
                                  [% ar.borrower.surname %][% IF ar.borrower.firstname %], [% ar.borrower.firstname %][% END %] 
                                  </a>
                               </p>
-                              <p>[% ar.borrower.phone %]</p>
+                              [% IF ar.patron_name %]<p>[% ar.patron_name %]</p>[% END %]
+                              [% IF ar.borrower.phone %]<p>[% ar.borrower.phone %]</p>[% END %]
                            </td>
-                           <td class="ar-date"><span title="[% ar.updated_on %]">[% ar.updated_on | $KohaDates %]</span></td>
+                           <td class="ar-date">
+                              <div>Création : [% ar.created_on | $KohaDates with_hours => 1 %]</div>
+                              <div>Mise à jour : [% ar.updated_on | $KohaDates with_hours => 1 %]</div>
+                           </td>
                            <td class="ar-notes">
                               [% IF ar.notes %] 
                               <p><strong>[% ar.notes %] </strong> </p>

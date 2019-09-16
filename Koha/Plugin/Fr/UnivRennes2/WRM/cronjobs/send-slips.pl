@@ -26,15 +26,12 @@ use Try::Tiny;
 use C4::Calendar;
 use Koha::Libraries; 
 use Koha::Plugins::Handler;
+use Koha::Plugin::Fr::UnivRennes2::WRM;
 use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests;
 use Koha::Plugin::Fr::UnivRennes2::WRM::Object::Slip;
 
-my $rmq_server = 'mq.uhb.fr';
-my $rmq_user = 'koha';
-my $rmq_pwd = 'xpjaPnSXcXHNCPvZ';
-my $rmq_port = '5672';
-my $rmq_vhost = 'testing';
-my $rmq_exchange = 'exchange_koha_print_tickets';
+my $plugin = Koha::Plugin::Fr::UnivRennes2::WRM->new();
+my ($rmq_server, $rmq_port, $rmq_vhost, $rmq_exchange, $rmq_user, $rmq_pwd) = $plugin->get_rmq_configuration();
 
 my $query = new CGI;
 

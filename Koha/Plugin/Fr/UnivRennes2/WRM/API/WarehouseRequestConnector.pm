@@ -19,10 +19,13 @@ use Modern::Perl;
 
 use CGI;
 use Authen::CAS::Client;
+use Koha::AuthorisedValues;
+use Koha::Items;
+use Koha::Library;
 use Koha::Plugin::Fr::UnivRennes2::WRM;
 use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequest;
 use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests;
-use Koha::Items;
+use Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status;
 use Mojo::Base 'Mojolicious::Controller';
 
 sub update_status {
@@ -34,6 +37,15 @@ sub update_status {
     
     my $wr = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->find($id);
     my $plugin = Koha::Plugin::Fr::UnivRennes2::WRM->new();
+    
+    if ($wr->status eq 'CANCELED' || $wr->status eq 'COMPLETED') {
+        return $c->render(
+            status => 403,
+            openapi => {
+                error => 'Modification impossible car la demande est déjà '.lc Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::GetStatusLabel($wr->status).'.'
+            }
+        );
+    }
     
     if ($wr) {
         if ( $action eq 'cancel' ) {
@@ -59,6 +71,33 @@ sub update_status {
         status => 404,
         openapi => {
             error => "Warehouse request not found"
+        }
+    );
+}
+
+sub cancel {
+    my $c = shift->openapi->valid_input or return;
+    
+    my $id = $c->validation->param('id');
+    my $user = $c->stash('koha.user');
+    my $wr = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->find($id);
+    
+    if ( $wr->borrowernumber != $user->borrowernumber || grep { $_ eq $wr->status } ['COMPLETED','CANCELED']  || $wr->archived ) {
+        return $c->render(
+            status => 403,
+            openapi => {
+                error => 'Vous n\'avez pas le droit d\'annuler cette demande'
+            }
+        );
+    }
+    
+    my $av = Koha::AuthorisedValues->find({ category => 'WR_REASON', authorised_value => 'CANCELED' });
+    $wr->cancel($av->lib);
+    
+    return $c->render(
+        status => 200,
+        openapi => {
+            success => Mojo::JSON->true
         }
     );
 }
@@ -164,16 +203,63 @@ sub request {
 sub list {
     my $c = shift->openapi->valid_input or return;
     
-    my $user = $c->stash('koha.user');
+    my $borrowernumber = $c->validation->param('borrowernumber');
+    unless ($borrowernumber) {
+        my $user = $c->stash('koha.user');
+        $borrowernumber = $user->borrowernumber;
+    }
+    unless ($borrowernumber) {
+        return $c->render(
+            status => 404,
+            openapi => {
+                error => "Utilisateur non trouvé"
+            }
+        );
+    }
     
-    my $requests = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search({ borrowernumber => $user->borrowernumber });
+    my $requests = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search({ borrowernumber => $borrowernumber, archived => 0 });
     
+    my @requests_list = $requests->as_list;    
+    @requests_list = map { _to_api( $_->TO_JSON, $_->biblio, $_->item, $_->branch ) } @requests_list;
+  
+    return $c->render(
+        status => 200,
+        openapi => \@requests_list
+    );
+}
+
+sub count {
+    my $c = shift->openapi->valid_input or return;
+    
+    my $biblionumber = $c->validation->param('biblionumber');
+    my $arguments;
+    if ($biblionumber) {
+        $arguments->{biblionumber} = $biblionumber;
+        $arguments->{status} = { 'NOT IN' => \"('COMPLETED','CANCELED')" };
+    } else {
+        $arguments->{status} = 'PROCESSING'
+    }
     return $c->render(
         status => 200,
         openapi => {
-            $requests
+            count => Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search($arguments)->count()
         }
-    )
+    );
+}
+
+sub _to_api {
+    my ($request, $biblio, $item, $branch) = @_;
+    $request->{branchname} = $branch->branchname;
+    $request->{biblio} = {
+        "title" => $biblio->title,
+        "author" => $biblio->author
+    };
+    $request->{item} = {
+        "location" => Koha::AuthorisedValues->find_by_koha_field( { kohafield => 'items.location', authorised_value => $item->location } )->lib,
+        "itemcallnumber" => $item->itemcallnumber
+    };
+    $request->{statusstr} = Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::GetStatusLabel($request->{status});
+    return $request;
 }
 
 1;

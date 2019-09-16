@@ -1,0 +1,99 @@
+    [% USE KohaDates %]
+    [% INCLUDE 'doc-head-open.inc' %]
+    <title>Koha: Kitchen Sink Plugin: Configuration</title>
+    [% INCLUDE 'doc-head-close.inc' %]
+</head>
+<body>
+    [% INCLUDE 'header.inc' %]
+    [% INCLUDE 'cat-search.inc' %]
+    
+    <div id="breadcrumbs"><a href="/cgi-bin/koha/mainpage.pl">Accueil</a> &rsaquo; <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a> &rsaquo; Configuration demandes magasin</div>
+    
+</div>
+    <div class="main container-fluid">
+        <div class="row">
+            <div class="col-md-10 col-md-offset-1 col-lg-8 col-lg-offset-2">
+                [% IF config_success %]
+                    <div class="panel panel-success">
+                        <div class="panel-heading">
+                            <h3 class="panel-title">Succès</h3>
+                        </div>
+                        <div class="panel-body">[% config_success %]</div>
+                    </div>
+                [% END %]
+                [% IF config_error %]
+                    <div class="panel panel-danger">
+                        <div class="panel-heading">
+                            <h3 class="panel-title">Erreur</h3>
+                        </div>
+                        <div class="panel-body">[% config_error %]</div>
+                    </div>
+                [% END %]                   
+                <!-- Notice our form here has no 'action', this is good, it means that our forms will always get passed back to 'plugins/run.pl'. You could hard code it instead if you prefer -->
+                <form method="post">
+                    <input type="hidden" name="class" value="[% CLASS %]"/>
+                    <input type="hidden" name="method" value="[% METHOD %]"/>
+                    <div class="rows">
+                    <!-- Always pass these two parameters so the plugin system knows what to execute! -->
+                        <h3>Configuration générale</h3>
+                        <ol>
+                            <li>
+                                <label for="days_to_keep"><span class="label">Nombre de jours de conservation : </span></label>
+                                <input type="number" id="days_to_keep" name="days_to_keep" value="[% days_to_keep %]" />
+                            </li>
+                            <li>
+                                <label for="days_since_archived"><span class="label">Nombre de jours avant archivage : </span></label>
+                                <input type="number" id="days_since_archived" name="days_since_archived" value="[% days_since_archived %]" />
+                            </li>
+                            <li>
+                                <label for="warehouse_locations"><span class="label">Localisations magasin : </span></label>
+                                <select id="warehouse_locations" name="warehouse_locations" multiple>
+                                    [% FOREACH l IN locations %]
+                                    <option value="[% l.authorised_value %]"[% IF warehouse_locations.grep('^' _ l.authorised_value _ '$').size %] selected="selected"[% END %]>[% l.lib %]</option>
+                                    [% END %]
+                                </select>
+                            </li>
+                        </ol>
+                    </div>
+                    <div class="rows">
+                    <!-- Always pass these two parameters so the plugin system knows what to execute! -->
+                        <h3>Configuration RabbitMQ</h3>
+                        <ol>
+                            <li>
+                                <label for="rmq_server"><span class="label">Serveur : </span></label>
+                                <input type="text" id="rmq_server" name="rmq_server" value="[% rmq_server %]" />
+                            </li>
+                            <li>
+                                <label for="rmq_port"><span class="label">Port : </span></label>
+                                <input type="text" id="rmq_port" name="rmq_port" value="[% rmq_port %]" />
+                            </li>
+                            <li>
+                                <label for="rmq_vhost"><span class="label">VirtualHost : </span></label>
+                                <input type="text" id="rmq_vhost" name="rmq_vhost" value="[% rmq_vhost %]" />
+                            </li>
+                            <li>
+                                <label for="rmq_exchange"><span class="label">Echangeur : </span></label>
+                                <input type="text" id="rmq_exchange" name="rmq_exchange" value="[% rmq_exchange %]" />
+                            </li>
+                            <li>
+                                <label for="rmq_user"><span class="label">Utilisateur : </span></label>
+                                <input type="text" id="rmq_user" name="rmq_user" value="[% rmq_user %]" />
+                            </li>
+                            <li>
+                                <label for="rmq_pwd"><span class="label">Mot de passe : </span></label>
+                                <input type="password" id="rmq_pwd" name="rmq_pwd" />
+                            </li>
+                            <li>
+                                <label for="rmq_pwd_conf"><span class="label">Mot de passe (confirmation) : </span></label>
+                                <input type="password" id="rmq_pwd_conf" name="rmq_pwd_conf" />
+                            </li>
+                        </ol>
+                    </div>
+                    <input type="hidden" name="save" value="1" />
+                    <hr />
+                    <button type="submit"><i class="fa fa-pencil"></i> Enregistrer la configuration</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    [% INCLUDE 'intranet-bottom.inc' %]
