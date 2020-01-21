@@ -15,10 +15,11 @@ div.message, .note {
     border: 0 !important;
 }
 body {
-    width:105mm;
-    height:148mm;
+    width:115mm;
+    height:158mm;
     font-size:12px;
     font-family:'Times New Roman';
+    border: none;
     padding: 0 !important;
     margin: 10mm !important;
 }

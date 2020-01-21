@@ -87,80 +87,8 @@
             },
             "x-koha-authorization": {
                 "permissions": {
-                    "circulate": "1"
+                    "plugins": "tool"
                 }
-            }
-        }
-    },
-    "/cancel/{id}": {
-        "post": {
-            "x-mojo-to": "Fr::UnivRennes2::WRM::API::WarehouseRequestConnector#cancel",
-            "operationId": "cancelWR",
-            "tags": ["warehouserequests"],
-            "produces": [
-                "application/json"
-            ],
-            "parameters": [
-                {
-                    "name": "id",
-                    "in": "path",
-                    "description": "Internal warehouse request identifier",
-                    "required": true,
-                    "type": "integer"
-                }
-            ],
-            "responses": {
-                "200": {
-                    "description": "Successness of the cancelation",
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "success": {
-                                "description": "Tells if the action succeeded",
-                                "type": "boolean"
-                            }
-                        }
-                    }
-                },
-                "403": {
-                    "description": "An error occured",
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "error": {
-                                "description": "An explanation for the error",
-                                "type": "string"
-                            }
-                        }
-                    }
-                },
-                "404": {
-                    "description": "An error occured",
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "error": {
-                                "description": "An explanation for the error",
-                                "type": "string"
-                            }
-                        }
-                    }
-                },
-                "502": {
-                    "description": "An error occured",
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "error": {
-                                "description": "An explanation for the error",
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            },
-            "x-koha-authorization": {
-                "allow-owner": true
             }
         }
     },
@@ -184,7 +112,7 @@
                     "in": "query",
                     "description": "Requested item itemnumber",
                     "required": false,
-                    "type": "integer"
+                    "type": "string"
                 },{
                     "name": "callnumber",
                     "in": "query",
@@ -225,7 +153,13 @@
                     "name": "ticket",
                     "in": "query",
                     "description": "CAS ticket",
-                    "required": true,
+                    "required": false,
+                    "type": "string"
+                },{
+                    "name": "callback",
+                    "in": "query",
+                    "description": "JSONP Callback",
+                    "required": false,
                     "type": "string"
                 }
             ],
@@ -233,51 +167,22 @@
                 "200": {
                     "description": "Successness of the creation",
                     "schema": {
-                        "type": "object",
-                        "properties": {
-                            "state": {
-                                "description": "Tells if the action succeeded",
-                                "type": "string",
-                                "enum": [
-                                    "success",
-                                    "failed"
-                                ]
-                            },
-                            "error": {
-                                "description": "Error message if failed",
-                                "type": "string",
-                                "enum": [
-                                    "LOGIN_FAILED",
-                                    "USER_NOT_FOUND",
-                                    "MISSING_INFO_JOURNAL",
-                                    "WS_CALL_FAILED"
-                                ]
-                            }
-                        }
+                        "type": "string",
+                        "description": "JSONP response"
                     }
                 },
                 "404": {
                     "description": "An error occured",
                     "schema": {
-                        "type": "object",
-                        "properties": {
-                            "error": {
-                                "description": "An explanation for the error",
-                                "type": "string"
-                            }
-                        }
+                        "type": "string",
+                        "description": "JSONP formatted error"
                     }
                 },
                 "502": {
                     "description": "An error occured",
                     "schema": {
-                        "type": "object",
-                        "properties": {
-                            "error": {
-                                "description": "An explanation for the error",
-                                "type": "string"
-                            }
-                        }
+                        "type": "string",
+                        "description": "JSONP formatted error"
                     }
                 }
             }
@@ -313,11 +218,11 @@
                                     "description": "Item informations of the document",
                                     "properties": {
                                         "location": {
-                                            "type": "string",
+                                            "type": ["string","null"],
                                             "description": "Location of the requested item"
                                         },
                                         "itemcallnumber": {
-                                            "type": "string",
+                                            "type": ["string","null"],
                                             "description": "Callnumber of the requested item"
                                         }
                                     }
@@ -327,11 +232,11 @@
                                     "description": "Biblio informations of the document",
                                     "properties": {
                                         "title": {
-                                            "type": "string",
+                                            "type": ["string","null"],
                                             "description": "Title of the requested item"
                                         },
                                         "author": {
-                                            "type": "string",
+                                            "type": ["string","null"],
                                             "description": "Author of the requested item"
                                         }
                                     }
@@ -484,7 +389,7 @@
                                             "description": "Title of the requested item"
                                         },
                                         "author": {
-                                            "type": "string",
+                                            "type": ["string","null"],
                                             "description": "Author of the requested item"
                                         }
                                     }
@@ -578,7 +483,195 @@
             },
             "x-koha-authorization": {
                 "permissions": {
-                    "circulate": "circulate_remaining_permissions"
+                    "borrowers": "view_borrower_infos_from_any_libraries"
+                }
+            }
+        }
+    },
+    "/list/are/{status}": {
+        "get": {
+            "x-mojo-to": "Fr::UnivRennes2::WRM::API::WarehouseRequestConnector#list",
+            "operationId": "listWRbyStatus",
+            "tags": ["warehouserequests"],
+            "produces": [
+                "application/json; charset=utf-8"
+            ],
+            "parameters": [
+                {
+                    "name": "status",
+                    "in": "path",
+                    "description": "WR Status",
+                    "required": true,
+                    "type": "string",
+                    "enum": [
+                        "PENDING",
+                        "PROCESSING",
+                        "WAITING",
+                        "COMPLETED",
+                        "CANCELED"
+                    ]
+                }
+            ],
+            "responses": {
+                "200": {
+                    "description": "List of the requests",
+                    "schema": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "integer",
+                                    "description": "Internal WR identifier"
+                                },
+                                "itemnumber": {
+                                    "type": "integer",
+                                    "description": "Internal item identifier"
+                                },
+                                "item": {
+                                    "type": "object",
+                                    "description": "Item informations of the document",
+                                    "properties": {
+                                        "location": {
+                                            "type": "string",
+                                            "description": "Location of the requested item"
+                                        },
+                                        "itemcallnumber": {
+                                            "type": "string",
+                                            "description": "Callnumber of the requested item"
+                                        },
+                                        "barcode": {
+                                            "type": ["string","null"],
+                                            "description": "Barcode of the requested item"
+                                        }
+                                    }
+                                },
+                                "borrowernumber": {
+                                    "type": "integer",
+                                    "description": "Internal patron identifier"
+                                },
+                                "borrower": {
+                                    "type": "object",
+                                    "description": "Requester informations",
+                                    "properties": {
+                                        "surname": {
+                                            "type": "string",
+                                            "description": "Surname of the requester"
+                                        },
+                                        "firstname": {
+                                            "type": ["string","null"],
+                                            "description": "Firstname of the requester"
+                                        },
+                                        "phone": {
+                                            "type": ["string","null"],
+                                            "description": "Phone number of the requester"
+                                        }
+                                    }
+                                },
+                                "biblio": {
+                                    "type": "object",
+                                    "description": "Biblio informations of the document",
+                                    "properties": {
+                                        "title": {
+                                            "type": "string",
+                                            "description": "Title of the requested item"
+                                        },
+                                        "author": {
+                                            "type": ["string","null"],
+                                            "description": "Author of the requested item"
+                                        }
+                                    }
+                                },
+                                "branchcode": {
+                                    "type": "string",
+                                    "description": "Internal library identifier"
+                                },
+                                "branchname": {
+                                    "type": "string",
+                                    "description": "Label ot the library"
+                                },
+                                "volume": {
+                                    "type": ["string", "null"],
+                                    "description": "Requested item volume"
+                                },
+                                "issue": {
+                                    "type": ["string", "null"],
+                                    "description": "Requested item issue"
+                                },
+                                "date": {
+                                    "type": ["string", "null"],
+                                    "description": "Requested item date"
+                                },
+                                "patron_name": {
+                                    "type": ["string", "null"],
+                                    "description": "Requested item date"
+                                },
+                                "patron_notes": {
+                                    "type": ["string", "null"],
+                                    "description": "Comment form the patron"
+                                },
+                                "status": {
+                                    "type": "string",
+                                    "enum": [
+                                        "PENDING",
+                                        "PROCESSING",
+                                        "WAITING",
+                                        "COMPLETED",
+                                        "CANCELED"
+                                    ],
+                                    "description": "Status of the request"
+                                },
+                                "statusstr": {
+                                    "type": "string",
+                                    "description": "Labeled version of the request's status"
+                                },
+                                "created_on": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "description": "Timestamp for the request creation"
+                                },
+                                "update_on": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "description": "Timestamp for the latest hold update"
+                                },
+                                "deadline": {
+                                    "type": ["string", "null"],
+                                    "format": "date-time",
+                                    "description": "Timestamp for the deadline to get the document"
+                                }
+                            }
+                        }
+                    }
+                },
+                "404": {
+                    "description": "An error occured",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "error": {
+                                "description": "An explanation for the error",
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "502": {
+                    "description": "An error occured",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "error": {
+                                "description": "An explanation for the error",
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "x-koha-authorization": {
+                "permissions": {
+                    "plugins": "tool"
                 }
             }
         }
@@ -640,7 +733,7 @@
             },
             "x-koha-authorization": {
                 "permissions": {
-                    "circulate": "circulate_remaining_permissions"
+                    "catalogue": "1"
                 }
             }
         }

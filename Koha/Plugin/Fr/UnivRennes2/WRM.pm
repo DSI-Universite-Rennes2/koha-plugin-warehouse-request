@@ -81,8 +81,6 @@ sub tool {
             warehouse_requests_pending    => scalar Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->pending($branchcode),
             warehouse_requests_processing => scalar Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->processing($branchcode),
             warehouse_requests_waiting    => scalar Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->waiting($branchcode),
-            warehouse_requests_completed  => scalar Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->completed($branchcode),
-            warehouse_requests_canceled   => scalar Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->canceled($branchcode),
             reasonsloop     => $reasonsloop,
         );
         
@@ -116,7 +114,7 @@ sub creation {
     };
     if ($biblio->itemtype ne 'REVUE') {
         $criterias->{itemnumber} = {
-            'NOT IN' => \"(SELECT itemnumber FROM warehouse_requests WHERE status NOT IN ('COMPLETED','CANCELED'))"
+            'NOT IN' => \"(SELECT itemnumber FROM warehouse_requests WHERE status NOT IN ('COMPLETED','CANCELED') AND itemnumber IS NOT NULL)"
         };
         $criterias->{onloan} = undef
     }
@@ -243,6 +241,12 @@ sub opac_head {
             #warehouse-requests th, #warehouse-requests .nowrap {
                 white-space: nowrap;
             }
+            #warehouse-requests td .label {
+                padding: 2px 4px;
+            }
+            #warehouse-requests .reason {
+                margin-top: 5px;
+            }
         </style>
     |;
 }
@@ -263,7 +267,7 @@ sub opac_js {
             
             function refreshWarehouseRequests() {
                 $.get( "/api/v1/contrib/wrm/list", function( data ) {
-                    $('#wrm-tab').text('Demandes de document ('+data.length+')');
+                    var cnt = 0;
                     var result =$('#warehouse-requests').empty();
                     result.append(`
                     <table class="table table-bordered table-striped dataTable no-footer" role="grid">
@@ -281,30 +285,33 @@ sub opac_js {
                                     <th>A retirer avant le</th>
                                     <th>Statut</th>
                                     <th>Site de retrait</th>
-                                    <th></th>
                                 </tr>
                             </thead>
                         `);
+                        data.sort(function(a, b){return b.id - a.id});
                         for ( var i = 0 ; i < data.length ; i++ ) {
                             console.log(data[i]);
                             var cd = new Date(data[i].created_on);
                             var rd = new Date(data[i].deadline);
                             var infoBlock = '<a href="/bib/'+data[i].biblionumber+'" title="'+data[i].biblio.title+'">'+data[i].biblio.title+'</a> '+data[i].biblio.author+' <span class="label">(Seulement '+data[i].item.itemcallnumber+')</span>';
                             var extInfoBlock = [];
-                            if (data[i].volume != '')   extInfoBlock.push('<span class="label">Volume(s) : '+data[i].volume+'</span>');
-                            if (data[i].issue != '')    extInfoBlock.push('<span class="label">Numéro(s) : '+data[i].issue+'</span>');
-                            if (data[i].date != '')     extInfoBlock.push('<span class="label">Date : '+data[i].date+'</span>');
+                            if (data[i].volume != '' && data[i].volume != undefined)   extInfoBlock.push('<span class="label">Volume(s) : '+data[i].volume+'</span>');
+                            if (data[i].issue != '' && data[i].issue != undefined)     extInfoBlock.push('<span class="label">Numéro(s) : '+data[i].issue+'</span>');
+                            if (data[i].date != '' && data[i].date != undefined)       extInfoBlock.push('<span class="label">Date : '+data[i].date+'</span>');
                             if (extInfoBlock.length > 0)    infoBlock += '<br />'+extInfoBlock.join(' | ');
                             result.find('tbody').append(`
                                 <tr>
                                     <td>`+infoBlock+`</td>
                                     <td>`+cd.toLocaleDateString()+' '+cd.toLocaleTimeString()+`</td>
                                     <td>`+rd.toLocaleDateString()+`</td>
-                                    <td class="nowrap">`+data[i].statusstr+`</td>
+                                    <td class="nowrap">`+colorStatus(data[i].statusstr, data[i].status)+( data[i].status == 'CANCELED' ? '<div class="reason">'+data[i].notes+'</div>' : '')+`</td>
                                     <td>`+data[i].branchname+`</td>
-                                    <td>`+(['CANCELED','COMPLETED'].indexOf(data[i].status) < 0 ? '<a data-id="'+data[i].id+'" class="cancel-wr btn btn-danger"><i class="fa fa-close"></i> Annuler</a>' : '')+`</td>
                                 </tr>
                             `);
+                            if ( ['CANCELED','COMPLETED'].indexOf(data[i].status) < 0 ) {
+                                cnt++;
+                            }
+                            $('#wrm-tab').text('Demandes de document ('+cnt+')');
                         }
                         $('.cancel-wr').click(function() {
                             if (confirm('Êtes-vous sûr(e) de vouloir annuler votre demande ?')) {
@@ -319,6 +326,26 @@ sub opac_js {
                         result.find('tbody').append('<tr><td>Aucune demande en cours</td></tr>');
                     }
                 });
+            }
+            
+            function colorStatus(str, code) {
+                var cls = "label";
+                switch(code) {
+                    case "PENDING":
+                    case "PROCESSING":
+                        cls += " label-warning";
+                        break;
+                    case "WAITING":
+                        cls += " label-success";
+                        break;
+                    case "COMPLETED":
+                        cls += " bg-gray text-white";
+                        break;
+                    case "CANCELED":
+                        cls += " label-danger";
+                        break;
+                }
+                return '<span class="'+cls+'">'+str+'</span>';
             }
         </script>
     @;
@@ -369,7 +396,7 @@ sub intranet_js {
             }
             // Circ homepage button injection
             if ( $('#circ_circulation-home').length > 0 ) {
-                var wrbutton = '<li><a class="circ-button" href="/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3AFr%3A%3AUnivRennes2%3A%3AWRM&method=tool" title="Demandes magasins"><i class="fa fa-file-text-o"></i> Demandes magasins</a></li>';
+                var wrbutton = '<li><a class="circ-button" href="/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3AFr%3A%3AUnivRennes2%3A%3AWRM&method=tool#warehouse-requests-processing" title="Demandes magasins"><i class="fa fa-file-text-o"></i> Demandes magasins</a></li>';
                 var requestsMenu = $('i.fa-newspaper-o').parents('ul.buttons-list');
                 if ( requestsMenu.length > 0 ) {
                     requestsMenu.prepend(wrbutton);
@@ -388,7 +415,7 @@ sub intranet_js {
             // Catalog detail link
             let searchParams = new URLSearchParams(window.location.search);
             $('#catalog_detail #toolbar, #catalog_moredetail #toolbar').append('<div class="btn-group"><a id="placehold" class="btn btn-default btn-sm" href="/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3AFr%3A%3AUnivRennes2%3A%3AWRM&method=tool&op=creation&biblionumber='+searchParams.get('biblionumber')+'"><i class="fa fa-file-text-o"></i> Demande magasin</a></div>');
-            if ( $('body.circ div#menu, body.catalog div#menu').length > 0 ) {
+            if ( $('body.circ div#menu, body.catalog div#menu').length > 0 && searchParams.get('biblionumber') != undefined) {
                 $('body.circ div#menu ul:first-child, body.catalog div#menu ul:first-child').append('<li><a id="wr-menu-link" href="/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3AFr%3A%3AUnivRennes2%3A%3AWRM&method=tool&op=creation&biblionumber='+searchParams.get('biblionumber')+'">Demandes magasin (?)</a></li>');
                 $.get({
                     url: "/api/v1/contrib/wrm/count?biblionumber="+searchParams.get('biblionumber'),
@@ -408,7 +435,7 @@ sub intranet_js {
                     url: "/api/v1/contrib/wrm/list/"+borrowernumber,
                     cache: true,
                     success: function( data ) {
-                        $('#wrm-tab').text( data.length+' Demandes magasin');
+                        var cnt = 0;
                         var result =$('#warehouse-requests').empty();
                         result.append(`
                         <table role="grid">
@@ -420,6 +447,7 @@ sub intranet_js {
                             result.find('table').prepend(`
                                 <thead>
                                     <tr>
+                                        <th>N°</th>
                                         <th>Informations</th>
                                         <th>Demandé le</th>
                                         <th>A chercher avant le</th>
@@ -433,14 +461,21 @@ sub intranet_js {
                                 console.log(data[i]);
                                 var cd = new Date(data[i].created_on);
                                 var rd = new Date(data[i].deadline);
-                                var infoBlock = '<a class="strong" href="/cgi-bin/koha/catalogue/detail.pl?biblionumber='+data[i].biblionumber+'" title="'+data[i].biblio.title+'">'+data[i].biblio.title+'</a> '+data[i].biblio.author+' <span class="label">(Seulement '+data[i].item.itemcallnumber+')</span>';
+                                var infoBlock = '<div><a class="strong" href="/cgi-bin/koha/catalogue/detail.pl?biblionumber='+data[i].biblionumber+'" title="'+data[i].biblio.title+'">'+data[i].biblio.title+'</a></div>';
+                                if ( data[i].biblio.author != '' && data[i].biblio.author != undefined ) {
+                                    infoBlock += '<div>'+data[i].biblio.author+'</div>';
+                                }
+                                if ( data[i].item.itemcallnumber != '' && data[i].item.itemcallnumber != undefined ) {
+                                    infoBlock += '<span class="label">(Côte : '+data[i].item.itemcallnumber+')</span>';
+                                }
                                 var extInfoBlock = [];
-                                if (data[i].volume != '')   extInfoBlock.push('<span class="label">Volume(s) : '+data[i].volume+'</span>');
-                                if (data[i].issue != '')    extInfoBlock.push('<span class="label">Numéro(s) : '+data[i].issue+'</span>');
-                                if (data[i].date != '')     extInfoBlock.push('<span class="label">Date : '+data[i].date+'</span>');
+                                if (data[i].volume != '' && data[i].volume != undefined)   extInfoBlock.push('<span class="label">Volume(s) : '+data[i].volume+'</span>');
+                                if (data[i].issue != '' && data[i].issue != undefined)     extInfoBlock.push('<span class="label">Numéro(s) : '+data[i].issue+'</span>');
+                                if (data[i].date != '' && data[i].date != undefined)       extInfoBlock.push('<span class="label">Date : '+data[i].date+'</span>');
                                 if (extInfoBlock.length > 0)    infoBlock += '<br />'+extInfoBlock.join(' | ');
                                 result.find('tbody').append(`
                                     <tr>
+                                        <td>`+data[i].id+`</td>
                                         <td>`+infoBlock+`</td>
                                         <td>`+cd.toLocaleDateString()+' '+cd.toLocaleTimeString()+`</td>
                                         <td>`+rd.toLocaleDateString()+`</td>
@@ -452,14 +487,19 @@ sub intranet_js {
                                                     ( data[i].status == 'WAITING' ? '<a data-id="'+data[i].id+'" title="Terminer la demande" class="complete-wr btn-xs btn btn-success"><i class="fa fa-fw fa-check"></i> Terminer</a>' : '' )+ 
                                                     '<a data-id="'+data[i].id+'" title="Annuler la demande" class="cancel-wr btn-xs btn btn-danger"><i class="fa fa-fw fa-close"></i> Annuler</a>'+
                                                 '</div>'
-                                            : '')
+                                            : '')+
+                                            ( data[i].status == 'CANCELED' ? '<div class="reason">'+data[i].notes+'</div>': '')
                                         +`</td>
                                     </tr>
                                 `);
+                                if ( ['CANCELED','COMPLETED'].indexOf(data[i].status) < 0 ) {
+                                    cnt++;
+                                }
                             }
+                            $('#wrm-tab').text( cnt+' Demandes magasin');
                             $('#warehouse-requests table').dataTable($.extend(true, {}, dataTablesDefaults, {
                                 "sDom": 't',
-                                "aaSorting": [[ 1, "desc" ]],
+                                "aaSorting": [[ 0, "desc" ]],
                                 "aoColumnDefs": [
                                     { "aTargets": [ -1 ], "bSortable": false, "bSearchable": false }
                                 ],
@@ -511,6 +551,7 @@ sub intranet_js {
                     }
                 });
             }
+            
         </script>
     @;
 }
@@ -599,7 +640,7 @@ sub install {
         ('circulation', 'WR_COMPLETED', '', 'Warehouse Request - Email - Completed', 0, 'Warehouse Request Completed', 'Bonjour <<borrowers.firstname>> <<borrowers.surname>>,\r\n\r\nNous avons le plaisir de vous informer que le document que vous avez demandé est à votre disposition à l''accueil de la BU centrale.\r\n\r\nPour rappel, il s''agissait d''une demande concernant :\r\n\r\nTitre : <<biblio.title>>\r\nAuteur: <<biblio.author>>\r\nCote : <<items.itemcallnumber>>\r\n\r\nPour l''emprunter, rendez-vous à l''accueil de la BU Centrale. Vous pouvez également le consulter sur place si vous le désirez.\r\n\r\nN''hésitez pas à nous contacter si toutefois vous n''étiez pas en mesure de vous déplacer pour retirer le document.\r\n\r\nBien cordialement,\r\nLes Bibliothèque de l''Université Rennes 2', 'email'),
         ('circulation', 'WR_PENDING', '', '[BU Rennes 2] Votre demande de document', 0, '[BU Rennes 2] Votre demande de document', 'Bonjour <<borrowers.firstname>> <<borrowers.surname>>,\r\n\r\nNous accusons bonne réception de votre demande concernant le document :\r\n\r\nTitre : <<biblio.title>>\r\nAuteur: <<biblio.author>>\r\nCote : <<items.itemcallnumber>>\r\n\r\nVotre demande sera traitée dans la journée (ou le lendemain pour les demandes effectuées après 18h00). Le document sera ensuite mis à disposition sur une étagère près de l''accueil de la BU centrale. Cinq levées ont lieu par jour, deux le matin et trois l''après-midi.\r\n\r\nCordialement,\r\nUniversité Rennes 2 - Bibliothèques', 'email'),
         ('circulation', 'WR_PROCESSING', '', '[BU Rennes 2] Prise en charge de votre demande', 1, '[BU Rennes 2] Prise en charge de votre demande', '<p>Bonjour <<borrowers.firstname>> <<borrowers.surname>>,</p>\r\n\r\n<p>Nous avons le plaisir de vous annoncer que votre demande pour le document <em><<biblio.title>></em> est bien prise en charge.</p>\r\n\r\n<p><strong>Vous recevrez bientôt un e-mail vous informant de la mise à disposition de ce dernier.</strong></p>\r\n\r\n<p><strong>Ne vous déplacez pas avant de recevoir cette confirmation.</strong></p>\r\n\r\n<p>N''hésitez pas à nous contacter pour toute information complémentaire.</p>\r\n\r\n<p>Cordialement,</p>\r\n<table border=\"0\" cellpadding=\"0\" cellspacing=\"2\" width=\"600\"><tbody><tr><td valign=\"top\" width=\"120\"><div align=\"center\"><a href=\"http://www.bu.univ-rennes2.fr\"><img src=\"https://www.bu.univ-rennes2.fr/sites/all/themes/bootstrap_bur2/img/logo_bu_rennes2.png\" alt=\"Logo BU Rennes 2\" moz-do-not-send=\"false\" style=\"padding-bottom:5px;\" border=\"0\" height=\"auto\" width=\"120\"></a><br> <a href=\"https://www.facebook.com/bibliotheques.univ.rennes2/\"><img moz-do-not-send=\"false\" alt=\"Logo Facebook\" src=\"https://www.univ-rennes2.fr/system/files/UHB/SERVICE-COMMUNICATION/facebook_logo.png\" border=\"0\" height=\"20\" width=\"20\"></a>  <a href=\"http://twitter.com/BURennes2\"><img alt=\"Logo Twitter\" moz-do-not-send=\"false\" src=\"https://www.univ-rennes2.fr/system/files/UHB/SERVICE-COMMUNICATION/twitter_logo.png\" border=\"0\" height=\"20\" width=\"20\"></a>  </div><br></td><td valign=\"top\"><small>\r\n<b><<branches.branchname>></b><br>\r\nBU Rennes 2<br>\r\n02 99 14 12 75<br>\r\n <a href=\"https://www.bu.univ-rennes2.fr\" title=\"BU en ligne\">www.bu.univ-rennes2.fr</a>\r\n</td></tr></tbody></table>', 'email'),
-        ('circulation', 'WR_SLIP', '', 'Warehouse Request - Print Slip', 1, 'Test', '<div class=\"message\">\r\n        <pre>\r\n            <div class=\"user\"><<borrowers.surname>> <<borrowers.firstname>> </div>\r\n            <div class=\"requestdate\"><strong>Ticket n° <<warehouse_request_id>>, le <<warehouse_request_created_on>></strong></div>\r\n            <div class=\"content\">		\r\n                <div class=\"typedoc\"><strong><<biblioitems.itemtype>></strong></div>		\r\n                <div class=\"requestdoc\"><<biblio.title>> / <<biblio.author>> ;  <<biblioitems.publicationyear>></div>\r\n                <div class=\"barcode\"><<items.itemcallnumber>></div>\r\n                <div class=\"volnum\"><strong>Vol.</strong> <<warehouse_request_volume>> - <strong>N°</strong> <<warehouse_request_issue>> - <strong>Année : </strong> <<warehouse_request_date>></div>\r\n                <div class=\"note\"><<warehouse_request_patron_notes>></div>\r\n            </div>\r\n        </pre>\r\n     </div>', 'print'),
+        ('circulation', 'WR_SLIP', '', 'Warehouse Request - Print Slip', 1, 'Test', '<div class=\"message\">\r\n        <pre>\r\n            <div class=\"user\"><<borrowers.surname>> <<borrowers.firstname>><<warehouse_request_patron_name>></div>\r\n            <div class=\"requestdate\"><strong>Ticket n° <<warehouse_request_id>>, le <<warehouse_request_created_on>></strong></div>\r\n            <div class=\"content\">		\r\n                <div class=\"typedoc\"><strong><<biblioitems.itemtype>></strong></div>		\r\n                <div class=\"requestdoc\"><<biblio.title>> / <<biblio.author>> ;  <<biblioitems.publicationyear>></div>\r\n                <div class=\"barcode\"><<items.itemcallnumber>></div>\r\n                <div class=\"volnum\"><strong>Vol.</strong> <<warehouse_request_volume>> - <strong>N°</strong> <<warehouse_request_issue>> - <strong>Année : </strong> <<warehouse_request_date>></div>\r\n                <div class=\"note\"><<warehouse_request_patron_notes>></div>\r\n            </div>\r\n        </pre>\r\n     </div>', 'print'),
         ('circulation', 'WR_WAITING', '', '[BU Rennes 2] Document disponible', 1, '[BU Rennes 2] Document disponible', '<p>Bonjour <<borrowers.firstname>> <<borrowers.surname>>,</p>\r\n\r\n<p>Votre document est <strong>disponible</strong>, il peut être retiré à l''accueil de la BU centrale.</p>\r\n<p>Pour rappel, il s''agissait d''une demande concernant :\r\n\r\n<ul style=\"list-style-type:none;\">\r\n  <li>Titre : <em><<biblio.title>></em></li>\r\n  <li>Auteur: <em><<biblio.author>></em></li>\r\n  <li>Cote : <em><<items.itemcallnumber>></em></li>\r\n</ul>\r\n<strong>Vous avez jusqu''à 3 jours pour venir consulter ou emprunter ce dernier. Au-delà et sans nouvelle de votre part, il sera remis en rayon.</strong></p>\r\n\r\n<p>N''hésitez pas à nous contacter si toutefois vous n''étiez pas en mesure de vous déplacer. </p>\r\n\r\n<p>Cordialement,</p>\r\n<table border=\"0\" cellpadding=\"0\" cellspacing=\"2\" width=\"600\"><tbody><tr><td valign=\"top\" width=\"120\"><div align=\"center\"><a href=\"http://www.bu.univ-rennes2.fr\"><img src=\"https://www.bu.univ-rennes2.fr/sites/all/themes/bootstrap_bur2/img/logo_bu_rennes2.png\" alt=\"Logo BU Rennes 2\" moz-do-not-send=\"false\" style=\"padding-bottom:5px;\" border=\"0\" height=\"auto\" width=\"120\"></a><br> <a href=\"https://www.facebook.com/bibliotheques.univ.rennes2/\"><img moz-do-not-send=\"false\" alt=\"Logo Facebook\" src=\"https://www.univ-rennes2.fr/system/files/UHB/SERVICE-COMMUNICATION/facebook_logo.png\" border=\"0\" height=\"20\" width=\"20\"></a>  <a href=\"http://twitter.com/BURennes2\"><img alt=\"Logo Twitter\" moz-do-not-send=\"false\" src=\"https://www.univ-rennes2.fr/system/files/UHB/SERVICE-COMMUNICATION/twitter_logo.png\" border=\"0\" height=\"20\" width=\"20\"></a>  </div><br></td><td valign=\"top\"><small>\r\n<b><<branches.branchname>></b><br>\r\nBU Rennes 2<br>\r\n02 99 14 12 75<br>\r\n <a href=\"https://www.bu.univ-rennes2.fr\" title=\"BU en ligne\">www.bu.univ-rennes2.fr</a>\r\n</td></tr></tbody></table>', 'email');
     ");
     $success = $success && symlink(

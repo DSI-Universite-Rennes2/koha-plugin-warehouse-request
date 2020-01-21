@@ -116,7 +116,7 @@ sub to_archive {
 
 =cut
 
-sub arched_since {
+sub archived_since {
     my ( $self, $since ) = @_;
     my $date = dt_from_string();
     $date->subtract( days => $since );

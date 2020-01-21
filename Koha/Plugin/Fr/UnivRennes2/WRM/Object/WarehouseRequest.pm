@@ -22,6 +22,7 @@ use Modern::Perl;
 use Carp;
 use DateTime;
 
+use C4::Context;
 use Koha::Calendar;
 use Koha::Database;
 use Koha::Patrons;
@@ -51,7 +52,10 @@ sub open {
     my ($self) = @_;
 
     $self->status(Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::Pending);
+    $self->SUPER::store();
+    $self->notify();
     return $self;
+    
 }
 
 =head3 process
@@ -63,7 +67,6 @@ sub process {
 
     $self->status(Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::Processing);
     $self->store();
-    $self->notify();
     return $self;
 }
 
@@ -126,7 +129,7 @@ sub archive {
 sub calculate_deadline {
     my ( $self, $days_to_keep ) = @_;
     my $calendar = Koha::Calendar->new(branchcode => $self->branchcode);
-    my $deadline = DateTime->now();
+    my $deadline = DateTime->now( time_zone => C4::Context->tz() );
     while ( $days_to_keep > 0 ) {
         $deadline = $calendar->next_open_day($deadline);
         $days_to_keep--;

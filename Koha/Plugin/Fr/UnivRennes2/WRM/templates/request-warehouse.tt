@@ -16,24 +16,26 @@
     });
     
     $(document).ready(function() {
-        $( "#patron" ).autocomplete({
-            source: "/cgi-bin/koha/circ/ysearch.pl",
-            minLength: 3,
-            select: function( event, ui ) {
-                $( "#patron" ).val( ui.item.cardnumber );
-                $( "#holds_patronsearch" ).submit();
-                return false;
-            }
-        })
-        .data( "ui-autocomplete" )._renderItem = function( ul, item ) {
-            return $( "<li></li>" )
-            .data( "ui-autocomplete-item", item )
-            .append( "<a>" + item.surname + ", " + item.firstname +
-                " (" + item.cardnumber + ") <small>" + item.address +
-                " " + item.city + " " + item.zipcode + " " +
-                item.country + "</small></a>" )
-            .appendTo( ul );
-        };
+        if ( $("#patron").length > 0 ) {
+            $( "#patron" ).autocomplete({
+                source: "/cgi-bin/koha/circ/ysearch.pl",
+                minLength: 3,
+                select: function( event, ui ) {
+                    $( "#patron" ).val( ui.item.cardnumber );
+                    $( "#holds_patronsearch" ).submit();
+                    return false;
+                }
+            })
+            .data( "ui-autocomplete" )._renderItem = function( ul, item ) {
+                return $( "<li></li>" )
+                .data( "ui-autocomplete-item", item )
+                .append( "<a>" + item.surname + ", " + item.firstname +
+                    " (" + item.cardnumber + ") <small>" + item.address +
+                    " " + item.city + " " + item.zipcode + " " +
+                    item.country + "</small></a>" )
+                .appendTo( ul );
+            };
+        }
         
         $('#circ_request-warehouse .complete-wr').click(function() {
             var id = $(this).attr('data-id');$.ajax({
@@ -81,6 +83,22 @@
             "aaSorting": [[ 2, "desc" ]],
             "bPaginate": false
         }));
+        
+        $('#place-warehouse-request').submit(function(e) {
+            if ($('#volume').length > 0 && $('#issue').length > 0 && $('#date').length > 0) {
+                var error = '';
+                if ($('#date').val() == '') {
+                    error += "Veuillez préciser l'année.";
+                }
+                if ($('#volume').val() == '' && $('#issue').val() == '') {
+                    error += "\nVeuillez préciser le volume et/ou le numéro.";
+                }
+                if (error != '') {
+                    alert(error);
+                    e.preventDefault();
+                }
+            }
+        });
     });
     // ]]>
 </script>

@@ -21,12 +21,12 @@ use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests;
 
 my $since = $ARGV[0];
 
-if ( $since == undef || !($since =~ /^\d+$/) ) {
+if ( defined $since || !($since =~ /^\d+$/) ) {
     exit 1;
 }
 
 my $plugin = Koha::Plugin::Fr::UnivRennes2::WRM->new();
-my @wr = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->archived_since( $plugin->get_days_since_archived );
+my @wr = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->archived_since( $since );
 my $counter = 0;
 foreach my $wr ( @wr ) {
     $counter += $wr->delete();

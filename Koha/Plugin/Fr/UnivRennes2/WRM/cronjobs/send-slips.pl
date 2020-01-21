@@ -23,7 +23,6 @@ use Mojo::JSON qw(decode_json encode_json);
 use Net::AMQP::RabbitMQ;
 use Try::Tiny;
 
-use C4::Calendar;
 use Koha::Libraries; 
 use Koha::Plugins::Handler;
 use Koha::Plugin::Fr::UnivRennes2::WRM;
@@ -35,14 +34,12 @@ my ($rmq_server, $rmq_port, $rmq_vhost, $rmq_exchange, $rmq_user, $rmq_pwd) = $p
 
 my $query = new CGI;
 
-my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime();
-$year+=1900;
-$mon+=1;
-
 my $branches = Koha::Libraries->search()->unblessed;
 foreach my $branch ( @$branches ) {
-    my $calendar = C4::Calendar->new(branchcode => $branch->{branchcode});
-    if (!$calendar->isHoliday($mday,$mon,$year)) {
+    my $av = Koha::AuthorisedValues->search({ category => 'FERMETURE_SERVICES', authorised_value => 'COMMAG_'.$branch });
+    my $closed = $av->count ? $av->next->lib : '';
+    
+    if ($closed eq '') {
         my @pending_wr = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->pending($branch->{branchcode});
         
         foreach my $wr (@pending_wr) {

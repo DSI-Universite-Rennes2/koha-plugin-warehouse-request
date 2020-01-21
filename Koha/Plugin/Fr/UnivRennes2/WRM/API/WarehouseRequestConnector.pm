@@ -75,60 +75,40 @@ sub update_status {
     );
 }
 
-sub cancel {
-    my $c = shift->openapi->valid_input or return;
-    
-    my $id = $c->validation->param('id');
-    my $user = $c->stash('koha.user');
-    my $wr = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->find($id);
-    
-    if ( $wr->borrowernumber != $user->borrowernumber || grep { $_ eq $wr->status } ['COMPLETED','CANCELED']  || $wr->archived ) {
-        return $c->render(
-            status => 403,
-            openapi => {
-                error => 'Vous n\'avez pas le droit d\'annuler cette demande'
-            }
-        );
-    }
-    
-    my $av = Koha::AuthorisedValues->find({ category => 'WR_REASON', authorised_value => 'CANCELED' });
-    $wr->cancel($av->lib);
-    
-    return $c->render(
-        status => 200,
-        openapi => {
-            success => Mojo::JSON->true
-        }
-    );
-}
-
 sub request {
     my $c = shift->openapi->valid_input or return;
     
-    my $ticket = $c->validation->param('ticket');
-    my $cas = Authen::CAS::Client->new( C4::Context->preference('casServerUrl') );
+    my $contenttype = $c->res->headers->content_type('application/javascript');
+    my $callback = $c->validation->param('callback') // 'callback';
+    $callback =~ s/[^a-zA-Z0-9\.\_\[\]]//g;
     
-    my $uri = $c->req->url->to_abs;
-    $uri =~ s/[&?]ticket=.+//g;
-    my $val = $cas->service_validate( $uri, $ticket );
-
-    my $userid;
-    if ( $val->is_success() ) {
-        $userid = $val->user();
+    my $user;
+    if ( $c->stash('koha.user') ) {
+        $user = $c->stash('koha.user');
     } else {
-        warn $val->error() if $val->is_error();
-        warn $val->message() if $val->is_failure();
+        my $cas_url = C4::Context->preference('casServerUrl');
+        my $cas = Authen::CAS::Client->new( $cas_url );
+        my $ticket = $c->validation->param('ticket');
+        my $uri = $c->req->url->to_abs;
+        my $userid;
+        if ( !defined $ticket || $ticket eq '' ) {
+            my $login_url = $cas->login_url($uri);
+            return $c->redirect_to($login_url);
+        } else {
+            $uri =~ s/[&?]ticket=[^&]+//g;
+            my $val = $cas->service_validate( $uri, $ticket);
+            if ( $val->is_success() ) {
+                $userid = $val->user();
+            }
+        }
+        $user = Koha::Patrons->find({ userid => $userid });
     }
-
-    my $user = Koha::Patrons->find({ userid => $userid });
 
     unless ( $user ) {
         return $c->render(
             status => 200,
-            openapi => {
-                state => 'failed',
-                error => 'USER_NOT_FOUND'
-            }
+            data => "$callback({state:'failed',error:'USER_NOT_FOUND'});",
+            format => $contenttype
         );
     }
     
@@ -149,10 +129,8 @@ sub request {
         if (($volume eq "" && $issue eq "") || $year eq "") {
             return $c->render(
                 status => 200,
-                openapi => {
-                    state => 'failed',
-                    error => 'MISSING_INFO_JOURNAL'
-                }
+                data => "$callback({state:'failed',error:'MISSING_INFO_JOURNAL'});",
+                format => $contenttype
             );
         }
         $item = Koha::Items->search({
@@ -161,15 +139,24 @@ sub request {
         })->single();
     } else {
         $item = Koha::Items->find({ itemnumber => $itemnumber });
+        if (Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search({
+            borrowernumber => $user->borrowernumber,
+            itemnumber => $item->itemnumber,
+            status => 'PENDING'
+        })->count > 0) {
+            return $c->render(
+                status => 200,
+                data => "$callback({state:'failed',error:'ALREADY_REQUESTED'});",
+                format => $contenttype
+            );
+        }
     }
     
     if ( $user->is_expired || $user->is_debarred ) {
         return $c->render(
             status => 200,
-            openapi => {
-                state => 'failed',
-                error => 'USER_NOT_FOUND'
-            }
+            data => "$callback({state:'failed',error:'USER_NOT_FOUND'});",
+            format => $contenttype
         );
     }
     
@@ -181,22 +168,20 @@ sub request {
         volume => $volume,
         issue => $issue,
         date => $year,
-        patron_note => $message
+        patron_notes => $message
     })->store();
     
     if ( $wr ) {
         return $c->render(
             status => 200,
-            openapi => {
-                state => 'success',
-            }
+            data => "$callback({state:'success'});",
+            format => $contenttype
         );
     }
     return $c->render(
         status => 500,
-        openapi => {
-            error => "Erreur lors de la transmission de la demande"
-        }
+        data => "$callback({error:'Erreur lors de la transmission de la demande'});",
+        format => $contenttype
     );
 }
 
@@ -204,23 +189,33 @@ sub list {
     my $c = shift->openapi->valid_input or return;
     
     my $borrowernumber = $c->validation->param('borrowernumber');
-    unless ($borrowernumber) {
-        my $user = $c->stash('koha.user');
-        $borrowernumber = $user->borrowernumber;
-    }
-    unless ($borrowernumber) {
-        return $c->render(
-            status => 404,
-            openapi => {
-                error => "Utilisateur non trouvé"
-            }
-        );
+    my $status = $c->validation->param('status');
+    my $params = {
+        archived => 0
+    };
+    if ( defined $status && $status ne '' ) {
+        $params->{status} = $status;
+    } else {
+        unless ($borrowernumber) {
+            my $user = $c->stash('koha.user');
+            $borrowernumber = $user->borrowernumber;
+        }
+        if ( defined $borrowernumber && $borrowernumber ne '' ) {
+            $params->{borrowernumber} = $borrowernumber;
+        } else {
+            return $c->render(
+                status => 404,
+                openapi => {
+                    error => "Utilisateur non trouvé"
+                }
+            );
+        }
     }
     
-    my $requests = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search({ borrowernumber => $borrowernumber, archived => 0 });
+    my $requests = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search($params);
     
-    my @requests_list = $requests->as_list;    
-    @requests_list = map { _to_api( $_->TO_JSON, $_->biblio, $_->item, $_->branch ) } @requests_list;
+    my @requests_list = $requests->as_list;
+    @requests_list = map { _to_api( $_->TO_JSON, $_->biblio, $_->item, $_->branch, $_->borrower, (defined $status && $status ne '') ) } @requests_list;
   
     return $c->render(
         status => 200,
@@ -248,7 +243,7 @@ sub count {
 }
 
 sub _to_api {
-    my ($request, $biblio, $item, $branch) = @_;
+    my ($request, $biblio, $item, $branch, $borrower, $bystatus) = @_;
     $request->{branchname} = $branch->branchname;
     $request->{biblio} = {
         "title" => $biblio->title,
@@ -256,8 +251,16 @@ sub _to_api {
     };
     $request->{item} = {
         "location" => Koha::AuthorisedValues->find_by_koha_field( { kohafield => 'items.location', authorised_value => $item->location } )->lib,
-        "itemcallnumber" => $item->itemcallnumber
+        "itemcallnumber" => $item->itemcallnumber,
+        "barcode" => $item->barcode
     };
+    if ($bystatus) {
+        $request->{borrower} = {
+            "firstname" => $borrower->firstname,
+            "surname" => $borrower->surname,
+            "phone" => $borrower->phone
+        };
+    }
     $request->{statusstr} = Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::GetStatusLabel($request->{status});
     return $request;
 }

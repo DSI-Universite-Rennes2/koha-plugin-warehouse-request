@@ -13,14 +13,14 @@
 <script type="text/javascript">
    //<![CDATA[
       $(document).ready(function() {
-         $("#warehouse-requests-pending-table,#warehouse-requests-processing-table,#warehouse-requests-waiting-table,#warehouse-requests-completed-table,#warehouse-requests-canceled-table").dataTable($.extend(true, {}, dataTablesDefaults, {
+         $("#warehouse-requests-pending-table,#warehouse-requests-processing-table,#warehouse-requests-waiting-table").dataTable($.extend(true, {}, dataTablesDefaults, {
             "aoColumnDefs": [
                { "bVisible": false, "aTargets": [ 3,5 ] },
                { "bSortable": true, "aTargets": ["_all"] },             
                { "sType": "wr-date", "aTargets" : [ "wr-date" ] },
                { "sType": "wr-title", "aTargets" : [ "wr-title" ] }
             ],
-            "aaSorting": [[ 7, 'desc' ]],
+            "aaSorting": [[ 0, 'desc' ]],
             "sPaginationType": "four_button",
             "autoWidth": false
          }));
@@ -47,6 +47,14 @@
    <script type="text/javascript">
       //<![CDATA[
          $(document).ready(function() {
+            var checkboxes = document.getElementsByTagName('input');
+            
+            for (var i=0; i<checkboxes.length; i++)  {
+              if (checkboxes[i].type == 'checkbox')   {
+                checkboxes[i].checked = false;
+              }
+            }
+            
             $('#warehouse-request-tabs').tabs({
                // Correct table sizing for tables hidden in tabs
                // http://www.datatables.net/examples/api/tabs_and_scrolling.html
@@ -115,13 +123,8 @@
                }); 
             [% END %]
             
-            [% IF warehouse_requests_canceled.count %]
-               $(".wr-canceled-none").hide();
-            [% END %]
-            
-            [% IF warehouse_requests_completed.count %]
-               $(".wr-completed-none").hide();
-            [% END %]
+            $(".wr-canceled-none").hide();
+            $(".wr-completed-none").hide();
             
             $("a[href*=back]").click(function(){
                var sid = $(this).attr("href").replace(/#back/,"");
@@ -134,6 +137,13 @@
                var id = $(this).attr('id');
                PrintSlip('/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3AFr%3A%3AUnivRennes2%3A%3AWRM&method=tool&op=ticket&id='+id);
                return false;
+            });
+            
+            $("a#load-completed-button").click(function() {
+               getList($(this),'completed');
+            });
+            $("a#load-canceled-button").click(function() {
+               getList($(this),'canceled');
             });
          });
          
@@ -332,25 +342,131 @@
          
          
          function UpdateTabCounts() {
-            var pending_count = $('#warehouse-requests-pending-table tbody tr.wr-row').length;
+            var pending_count = $('#warehouse-requests-pending-table').DataTable().rows().count();
             $("#wr_pending_count").html( pending_count );
             if ( pending_count == 0 ) $(".wr-pending-none").show();
             
-            var processing_count = $('#warehouse-requests-processing-table tbody tr.wr-row').length;
+            var processing_count = $('#warehouse-requests-processing-table').DataTable().rows().count();
             $("#wr_processing_count").html( processing_count );
             if ( processing_count == 0 ) $(".wr-processing-none").show();
             
-            var waiting_count = $('#warehouse-requests-waiting-table tbody tr.wr-row').length;
+            var waiting_count = $('#warehouse-requests-waiting-table').DataTable().rows().count();
             $("#wr_waiting_count").html( waiting_count );
             if ( waiting_count == 0 ) $(".wr-waiting-none").show();
             
-            var completed_count = $('#warehouse-requests-completed-table tbody tr.wr-row').length;
-            $("#wr_completed_count").html( completed_count );
-            if ( completed_count == 0 ) $(".wr-completed-none").show();
+            if ($('#warehouse-requests-completed-table').length > 0) {
+               var completed_count = $('#warehouse-requests-completed-table').DataTable().rows().count();
+               $("#wr_completed_count").html( ' ('+completed_count+')' );
+               if ( completed_count == 0 ) $(".wr-completed-none").show();
+            }
             
-            var canceled_count = $('#warehouse-requests-canceled-table tbody tr.wr-row').length;
-            $("#wr_canceled_count").html( canceled_count );
-            if ( canceled_count == 0 ) $(".wr-canceled-none").show();
+            if ($('#warehouse-requests-canceled-table').length > 0) {
+               var canceled_count = $('#warehouse-requests-canceled-table').DataTable().rows().count();
+               $("#wr_canceled_count").html( ' ('+canceled_count+')' );
+               if ( canceled_count == 0 ) $(".wr-canceled-none").show();
+            }
+         }
+         
+         function getList(button, status) {
+            if (status != 'completed' && status != 'canceled') return;
+            var parent = $(button).parent();
+            $(button).remove();
+            parent.append('<div class="loading">Chargement...</div>');
+            $.ajax({
+               type: "GET",
+               url: '/api/v1/contrib/wrm/list/are/'+status.toUpperCase(),
+               success: function( data ) {
+                  parent.find('.loading').remove();
+                  parent.append(`
+                     <table id="warehouse-requests-`+status+`-table">
+                        <thead>
+                           <tr>
+                              <th class="wr-id">N°</th>
+                              <th class="wr-title">Notice</th>
+                              <th class="wr-request">Informations complémentaires</th>
+                              <th class="wr-itemtype">Type de document</th>
+                              <th class="wr-callnumber">Cote</th>
+                              <th class="wr-barcode">Code à barres</th>
+                              <th class="wr-patron">Adhérent</th>
+                              <th class="wr-date">Dates</th>`+
+                              (status == 'canceled' ? '<th class="wr-notes">Motif</th>' : '')+
+                              `<th class="wr-actions">Actions</th>
+                           </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                     </table>
+                  `);
+                  $.each(data, function(i, wr) {
+                     $('#warehouse-requests-'+status+'-table tbody').append(`
+                        <tr class="wr-row wr-`+status+`">
+                           <td class="wr-id">`+wr.id+`</td>
+                           <td class="wr-title">
+                              <p>
+                                 <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=`+wr.biblionumber+`">
+                                 <strong>`+wr.biblio.title+`</strong>
+                                 </a>
+                              </p>
+                              <p>
+                                 <div class="wr-biblionumber content_hidden">`+wr.biblionumber+`</div>
+                                 <div class="wr-author">`+wr.biblio.author+`</div>
+                              </p>
+                           </td>
+                           <td class="wr-request">`+
+                              ( wr.volume ? '<p><strong>Volume(s)&nbsp;:</strong> '+wr.volume+'</p>' : '') +
+                              ( wr.issue ? '<p><strong>Numéro(s)&nbsp;:</strong> '+wr.issue+'</p>' : '') +
+                              ( wr.date ? '<p><strong>Date&nbsp;:</strong> '+wr.date+'</p>' : '') +
+                              ( wr.patron_notes ? '<p><strong>Autre information&nbsp;:</strong> '+wr.patron_notes+'</p>' : '') +
+                           `</td>
+                           <td class="wr-itemtype">[% ItemTypes.GetDescription( wr.item.effective_itemtype ) %]</td>
+                           <td class="wr-callnumber">`+
+                              ( wr.item.location != '' ? '<em>'+wr.item.location+'</em> ' : '') +
+                              wr.item.itemcallnumber+
+                           `</td>
+                           <td class="wr-barcode">`+wr.item.barcode+`</td>
+                           <td class="wr-patron">
+                              <p>
+                                 <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=`+wr.borrowernumber+`">`+
+                                 wr.borrower.surname+(wr.borrower.firstname ? ', '+wr.borrower.firstname : '') +
+                                 `</a>
+                              </p>`+
+                              ( wr.patron_name ? '<p>'+wr.patron_name+'</p>' : '') +
+                              ( wr.borrower.phone ? '<p>'+wr.borrower.phone+'</p>' : '')+
+                           `</td>
+                           <td class="wr-date">
+                              <div>Création : `+(new Date(wr.created_on).toLocaleString())+`</div>
+                              <div>Mise à jour : `+(new Date(wr.updated_on).toLocaleString())+`</div>
+                           </td>`+
+                           ( status == 'canceled' ? '<td class="wr-notes">' + ( wr.notes ? '<p><strong>'+wr.notes+'</strong></p>' : '' ) +'</td>' : '' )+
+                           `<td class="wr-actions">
+                              <a class="wr-print-request btn btn-xs" href="#" id="`+wr.id+`">
+                                 <i class="fa fa-print"></i> Imprimer
+                              </a>
+                           </td>
+                        </tr>
+                     `);
+                  });
+                  $("#warehouse-requests-"+status+"-table a.wr-print-request").click(function(e) {
+                     e.preventDefault();
+                     var id = $(this).attr('id');
+                     PrintSlip('/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3AFr%3A%3AUnivRennes2%3A%3AWRM&method=tool&op=ticket&id='+id);
+                     return false;
+                  });
+                  $('#warehouse-requests-'+status+'-table').dataTable($.extend(true, {}, dataTablesDefaults, {
+                     "aoColumnDefs": [
+                        { "bVisible": false, "aTargets": [ 3,5 ] },
+                        { "bSortable": true, "aTargets": ["_all"] },             
+                        { "sType": "wr-date", "aTargets" : [ "wr-date" ] },
+                        { "sType": "wr-title", "aTargets" : [ "wr-title" ] }
+                     ],
+                     "aaSorting": [[ 0, 'desc' ]],
+                     "sPaginationType": "four_button",
+                     "autoWidth": false
+                  }));
+                  UpdateTabCounts();
+               },
+               dataType: 'json'
+            });
          }
       //]]>
    </script>
@@ -399,12 +515,12 @@
                   </li>
                   <li>
                      <a href="#warehouse-requests-canceled">
-                     Annulées (<span id="wr_canceled_count">[% warehouse_requests_canceled.count %]</span>)
+                     Annulées<span id="wr_canceled_count"></span>
                      </a>
                   </li>
                   <li>
                      <a href="#warehouse-requests-completed">
-                     Terminées (<span id="wr_completed_count">[% warehouse_requests_completed.count %]</span>)
+                     Terminées<span id="wr_completed_count"></span>
                      </a>
                   </li>
                </ul>
@@ -774,9 +890,7 @@
                </div>
                <div id="warehouse-requests-completed">
                   <div class="wr-completed-none">
-                     <p>
-                        There are no completed warehouse requests at this time.
-                     </p>
+                     <p>Il n'y as pas de demande terminées actuellement.</p>
                   </div>
                   <form id="f-wr-warehouse-requests-completed" name="f-wr-warehouse-requests-completed" class="wr-form" method="post" action="" autocomplete="off" >
                      <input type="hidden" name="type" value="scan"/>
@@ -789,175 +903,13 @@
                         <input value="Valider" type="submit" />
                      </fieldset>
                   </form>
-                  <table id="warehouse-requests-completed-table">
-                     <thead>
-                        <tr>
-                           <th class="wr-id">N°</th>
-                           <th class="wr-title">Notice</th>
-                           <th class="wr-request">Informations complémentaires</th>
-                           <th class="wr-itemtype">Type de document</th>
-                           <th class="wr-callnumber">Cote</th>
-                           <th class="wr-barcode">Code à barres</th>
-                           <th class="wr-patron">Adhérent</th>
-                           <th class="wr-date">Dates</th>
-                           <th class="wr-actions">Actions</th>
-                        </tr>
-                     </thead>
-                     <tbody>
-                        [% FOREACH wr IN warehouse_requests_completed %]
-                        <tr class="wr-row wr-completed">
-                           <td class="wr-id">
-                              [% wr.id %]
-                           </td>
-                           <td class="wr-title">
-                              <p>
-                                 <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% wr.biblionumber %]">
-                                 <strong>[% wr.biblio.title | html %]</strong>
-                                 [% FOREACH s IN itemsloo.subtitle %] [% s %][% END %]
-                                 </a>
-                              </p>
-                              <p>
-                              <div class="wr-biblionumber content_hidden">[% wr.biblionumber %]</div>
-                              <div class="wr-author">[% wr.biblio.author %]</div>
-                              <div class="wr-pubdata">
-                                 [% wr.biblio.biblioitem.publishercode %] [% IF wr.biblio.biblioitem.publicationyear %] [% wr.biblio.biblioitem.publicationyear %] [% ELSIF wr.biblio.copyrightdate %] [% wr.biblio.copyrightdate %] [% END %] [% IF wr.biblio.biblioitem.pages %] : [% wr.biblio.biblioitem.pages %] [% END %] [%  r.biblio.biblioitem.size %] [% IF wr.biblio.biblioitem.isbn %] ISBN&nbsp;: [% wr.biblio.biblioitem.isbn %] [% END %] 
-                              </div>
-                              </p>
-                           </td>
-                           <td class="wr-request">
-                              [% IF wr.volume %] 
-                              <p><strong>Volume(s)&nbsp;:</strong> [% wr.volume %] </p>
-                              [% END %]
-                              [% IF wr.issue %] 
-                              <p><strong>Numéro(s)&nbsp;:</strong> [% wr.issue %] </p>
-                              [% END %]
-                              [% IF wr.date %] 
-                              <p><strong>Date&nbsp;:</strong> [% wr.date %] </p>
-                              [% END %]
-                              [% IF wr.patron_notes %] 
-                              <p><strong>Autre information&nbsp;:</strong> [% wr.patron_notes %] </p>
-                              [% END %]
-                           </td>
-                           <td class="wr-itemtype">[% ItemTypes.GetDescription( wr.item.effective_itemtype ) %]</td>
-                           <td class="wr-callnumber">
-                              [% IF wr.item.location %]
-                              <em>[% AuthorisedValues.GetByCode( 'LOC', wr.item.location ) %]</em>
-                              [% END %]
-                              [% wr.item.itemcallnumber %]
-                           </td>
-                           <td class="wr-barcode">[% wr.item.barcode %]</td>
-                           <td class="wr-patron">
-                              <p>
-                                 <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% wr.borrower.borrowernumber %]">
-                                 [% wr.borrower.surname %][% IF wr.borrower.firstname %], [% wr.borrower.firstname %][% END %] 
-                                 </a>
-                              </p>
-                              [% IF wr.patron_name %]<p>[% wr.patron_name %]</p>[% END %]
-                              [% IF wr.borrower.phone %]<p>[% wr.borrower.phone %]</p>[% END %]
-                           </td>
-                           <td class="wr-date">
-                              <div>Création : [% wr.created_on | $KohaDates with_hours => 1 %]</div>
-                              <div>Mise à jour : [% wr.updated_on | $KohaDates with_hours => 1 %]</div>
-                           </td>
-                           <td class="wr-actions">
-                              <a class="wr-print-request btn btn-xs" href="#" id="[% wr.id %]">
-                                 <i class="fa fa-print"></i> Imprimer
-                              </a>
-                           </td>
-                        </tr>
-                        [% END %]
-                     </tbody>
-                  </table>
+                  <a id="load-completed-button" href="#" class="btn btn-default"><i class="fa fa-file-text"></i> Afficher les demandes terminées</a>
                </div>
                <div id="warehouse-requests-canceled">
                   <div class="wr-canceled-none">
                      <p>Il n'y as pas de demande annulée actuellement.</p>
                   </div>
-                  <table id="warehouse-requests-canceled-table">
-                     <thead>
-                        <tr>
-                           <th class="wr-id">N°</th>
-                           <th class="wr-title">Notice</th>
-                           <th class="wr-request">Informations complémentaires</th>
-                           <th class="wr-itemtype">Type de document</th>
-                           <th class="wr-callnumber">Cote</th>
-                           <th class="wr-barcode">Code à barres</th>
-                           <th class="wr-patron">Adhérent</th>
-                           <th class="wr-date">Dates</th>
-                           <th class="wr-notes">Motif</th>
-                           <th class="wr-actions">Actions</th>
-                        </tr>
-                     </thead>
-                     <tbody>
-                        [% FOREACH wr IN warehouse_requests_canceled %]
-                        <tr class="wr-row wr-canceled">
-                           <td class="wr-id">
-                              [% wr.id %]
-                           </td>
-                           <td class="wr-title">
-                              <p>
-                                 <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% wr.biblionumber %]">
-                                 <strong>[% wr.biblio.title | html %]</strong>
-                                 [% FOREACH s IN itemsloo.subtitle %] [% s %][% END %]
-                                 </a>
-                              </p>
-                              <p>
-                              <div class="wr-biblionumber content_hidden">[% wr.biblionumber %]</div>
-                              <div class="wr-author">[% wr.biblio.author %]</div>
-                              <div class="wr-pubdata">
-                                 [% wr.biblio.biblioitem.publishercode %] [% IF wr.biblio.biblioitem.publicationyear %] [% wr.biblio.biblioitem.publicationyear %] [% ELSIF wr.biblio.copyrightdate %] [% wr.biblio.copyrightdate %] [% END %] [% IF wr.biblio.biblioitem.pages %] : [% wr.biblio.biblioitem.pages %] [% END %] [%  r.biblio.biblioitem.size %] [% IF wr.biblio.biblioitem.isbn %] ISBN&nbsp;: [% wr.biblio.biblioitem.isbn %] [% END %] 
-                              </div>
-                              </p>
-                           </td>
-                           <td class="wr-request">
-                              [% IF wr.volume %] 
-                              <p><strong>Volume(s)&nbsp;:</strong> [% wr.volume %] </p>
-                              [% END %]
-                              [% IF wr.issue %] 
-                              <p><strong>Numéro(s)&nbsp;:</strong> [% wr.issue %] </p>
-                              [% END %]
-                              [% IF wr.date %] 
-                              <p><strong>Date&nbsp;:</strong> [% wr.date %] </p>
-                              [% END %]
-                              [% IF wr.patron_notes %] 
-                              <p><strong>Autre information&nbsp;:</strong> [% wr.patron_notes %] </p>
-                              [% END %]
-                           </td>
-                           <td class="wr-itemtype">[% ItemTypes.GetDescription( wr.item.effective_itemtype ) %]</td>
-                           <td class="wr-callnumber">
-                              [% IF wr.item.location %]
-                              <em>[% AuthorisedValues.GetByCode( 'LOC', wr.item.location ) %]</em>
-                              [% END %]
-                              [% wr.item.itemcallnumber %]
-                           </td>
-                           <td class="wr-barcode">[% wr.item.barcode %]</td>
-                           <td class="wr-patron">
-                              <p>
-                                 <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% wr.borrower.borrowernumber %]">
-                                 [% wr.borrower.surname %][% IF wr.borrower.firstname %], [% wr.borrower.firstname %][% END %] 
-                                 </a>
-                              </p>
-                              [% IF wr.patron_name %]<p>[% wr.patron_name %]</p>[% END %]
-                              [% IF wr.borrower.phone %]<p>[% wr.borrower.phone %]</p>[% END %]
-                           </td>
-                           <td class="wr-date">
-                              <div>Création : [% wr.created_on | $KohaDates with_hours => 1 %]</div>
-                              <div>Mise à jour : [% wr.updated_on | $KohaDates with_hours => 1 %]</div>
-                           </td>
-                           <td class="wr-notes">
-                              [% IF wr.notes %] 
-                              <p><strong>[% wr.notes %] </strong> </p>
-                              [% END %]
-                           </td>
-                           <td class="wr-actions">
-                              <a class="wr-print-request btn btn-xs" href="#" id="[% wr.id %]">
-                                 <i class="fa fa-print"></i> Imprimer
-                              </a>
-                           </td>
-                        </tr>
-                        [% END %]
-                     </tbody>
-                  </table>
+                  <a id="load-canceled-button" href="#" class="btn btn-default"><i class="fa fa-file-text"></i> Afficher les demandes annulées</a>
                </div>
             </div>
          </div>

@@ -24,4 +24,4 @@ my @wr = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->to_archi
 foreach my $wr ( @wr ) {
     $wr->archive();
 }
-print (scalar @wr)." warehouse requests has been archived.\n";
+print scalar @wr." warehouse requests has been archived.\n";
