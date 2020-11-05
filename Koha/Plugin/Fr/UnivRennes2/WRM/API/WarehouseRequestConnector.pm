@@ -152,10 +152,10 @@ sub request {
         }
     }
     
-    if ( $user->is_expired || $user->is_debarred ) {
+    if ( $user->is_expired ) {
         return $c->render(
             status => 200,
-            data => "$callback({state:'failed',error:'USER_NOT_FOUND'});",
+            data => "$callback({state:'failed',error:'USER_NOT_ALLOWED'});",
             format => $contenttype
         );
     }
