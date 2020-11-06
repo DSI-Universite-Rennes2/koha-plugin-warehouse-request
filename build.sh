@@ -9,9 +9,9 @@ FILEPATHFULLDIST=dist/$FILEPATH/$FILENAME;
 
 mkdir dist ;
 cp -r Koha dist/. ;
-sed -i -e "s/{VERSION}/$VERSION/g" $FILEPATHFULLDIST ;
-sed -i -e "s/{UPDATE_DATE}/$TODAY/g" $FILEPATHFULLDIST ;
+perl -pi -e "s/{VERSION}/$VERSION/g" $FILEPATHFULLDIST ;
+perl -pi -e "s/{UPDATE_DATE}/$TODAY/g" $FILEPATHFULLDIST ;
 cd dist ;
-zip -r ../kpz/$KPZFILENAME ./Koha ;
+zip -r ../kpz/$KPZFILENAME ./Koha -x "*.DS_Store";
 cd .. ;
 rm -rf dist ;
