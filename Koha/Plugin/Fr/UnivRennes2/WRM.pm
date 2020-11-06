@@ -26,14 +26,14 @@ use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests;
 use Koha::Plugin::Fr::UnivRennes2::WRM::Object::Slip;
 
 ## Here we set our plugin version
-our $VERSION = '{VERSION}';
+our $VERSION = '0.95';
 
 ## Here is our metadata, some keys are required, some are optional
 our $metadata = {
     name            => 'Demandes magasin',
     author          => 'Sicot Julien/Joncour Gwendal',
     date_authored   => '2019-06-25',
-    date_updated    => '{UPDATE_DATE}',
+    date_updated    => '2019-11-06',
     minimum_version => '18.110000',
     maximum_version => undef,
     version         => $VERSION,
@@ -108,13 +108,21 @@ sub creation {
     if (my $wloc = $self->retrieve_data('warehouse_locations')) {
         @warehouse_locations = split(',', $wloc);
     }
+    
+    my @warehouse_branches;
+    if (my $wlib = $self->retrieve_data('warehouse_branches')) {
+        @warehouse_branches = split(',', $wlib);
+    }
+   
     my $criterias = {
         biblionumber => $biblionumber,
-        location => \@warehouse_locations
+        location => \@warehouse_locations,
+        homebranch => \@warehouse_branches
     };
+    
     if ($biblio->itemtype ne 'REVUE') {
         $criterias->{itemnumber} = {
-            'NOT IN' => \"(SELECT itemnumber FROM warehouse_requests WHERE status NOT IN ('COMPLETED','CANCELED') AND itemnumber IS NOT NULL)"
+            'NOT IN' => \"(SELECT itemnumber FROM warehouse_requests WHERE status NOT IN ('COMPLETED','CANCELED'))"
         };
         $criterias->{onloan} = undef
     }
@@ -566,6 +574,7 @@ sub configure {
         $myconf->{days_to_keep} = $cgi->param('days_to_keep');
         $myconf->{days_since_archived} = $cgi->param('days_since_archived');
         $myconf->{warehouse_locations} = join(",", $cgi->multi_param('warehouse_locations'));
+        $myconf->{warehouse_branches} = join(",", $cgi->multi_param('warehouse_branches'));                
         $myconf->{rmq_server} = $cgi->param('rmq_server');
         $myconf->{rmq_port} = $cgi->param('rmq_port');
         $myconf->{rmq_vhost} = $cgi->param('rmq_vhost');
@@ -588,12 +597,24 @@ sub configure {
     if (my $wloc = $self->retrieve_data('warehouse_locations')) {
         @warehouse_locations = split(',', $wloc);
     }
-    my $locations = GetAuthorisedValues('LOC');
+    my $locations = my $locations = { map { ( $_->{authorised_value} => $_->{lib} ) } Koha::AuthorisedValues->get_descriptions_by_koha_field( { frameworkcode => '', kohafield => 'items.location' }, { order_by => ['description'] } ) };
+    my @locations;
+	foreach (sort keys %$locations) {
+		push @locations, { code => $_, description => "$_ - " . $locations->{$_} };
+	}
+    my @warehouse_branches;
+    if (my $wlib = $self->retrieve_data('warehouse_branches')) {
+        @warehouse_branches = split(',', $wlib);
+    }
+    my $branches = Koha::Libraries->search( {}, { order_by => ['branchname'] } )->unblessed;
+
     $template->param(
         'days_to_keep' => $self->retrieve_data('days_to_keep'),
         'days_since_archived' => $self->retrieve_data('days_since_archived'),
-        'locations' => $locations,
+        'locations' => \@locations,
         'warehouse_locations' => \@warehouse_locations,
+        'warehouse_branches' => \@warehouse_branches,
+        'branches' => $branches,
         'rmq_server' => $self->retrieve_data('rmq_server'),
         'rmq_port' => $self->retrieve_data('rmq_port'),
         'rmq_vhost' => $self->retrieve_data('rmq_vhost'),

@@ -1,6 +1,6 @@
     [% USE KohaDates %]
     [% INCLUDE 'doc-head-open.inc' %]
-    <title>Koha: Kitchen Sink Plugin: Configuration</title>
+    <title>Koha: Warehouse Request Management Plugin: Configuration</title>
     [% INCLUDE 'doc-head-close.inc' %]
 </head>
 <body>
@@ -46,10 +46,18 @@
                                 <input type="number" id="days_since_archived" name="days_since_archived" value="[% days_since_archived %]" />
                             </li>
                             <li>
-                                <label for="warehouse_locations"><span class="label">Localisations magasin : </span></label>
+                                <label for="warehouse_branches"><span class="label">Sites à activer : </span></label>
+                                <select id="warehouse_branches" name="warehouse_branches" multiple>
+                                    [% FOREACH b IN branches %]
+                                     <option value="[% b.branchcode %]"[% IF warehouse_branches.grep('^' _ b.branchcode _ '$').size %] selected="selected"[% END %]>[% b.branchname | html %]</option>
+                                    [% END %]
+                                </select>
+                            </li>
+                            <li>
+                                <label for="warehouse_locations"><span class="label">Localisations à activer : </span></label>
                                 <select id="warehouse_locations" name="warehouse_locations" multiple>
                                     [% FOREACH l IN locations %]
-                                    <option value="[% l.authorised_value %]"[% IF warehouse_locations.grep('^' _ l.authorised_value _ '$').size %] selected="selected"[% END %]>[% l.lib %]</option>
+                                    <option value="[% l.code %]"[% IF warehouse_locations.grep('^' _ l.code _ '$').size %] selected="selected"[% END %]>[% l.description %]</option>
                                     [% END %]
                                 </select>
                             </li>

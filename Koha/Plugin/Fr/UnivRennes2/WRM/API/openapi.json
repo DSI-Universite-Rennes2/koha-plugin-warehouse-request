@@ -87,7 +87,7 @@
             },
             "x-koha-authorization": {
                 "permissions": {
-                    "plugins": "tool"
+                    "circulate": "1"
                 }
             }
         }
@@ -483,7 +483,7 @@
             },
             "x-koha-authorization": {
                 "permissions": {
-                    "borrowers": "view_borrower_infos_from_any_libraries"
+                    "circulate": "circulate_remaining_permissions"
                 }
             }
         }
@@ -671,7 +671,53 @@
             },
             "x-koha-authorization": {
                 "permissions": {
-                    "plugins": "tool"
+                    "circulate": "circulate_remaining_permissions"
+                }
+            }
+        }
+    },
+    "/biblio/{biblionumber}": {
+        "get": {
+            "x-mojo-to": "Fr::UnivRennes2::WRM::API::WarehouseRequestConnector#check_requestable_items",
+            "operationId": "check_requestable_items",
+            "tags": ["warehouserequests"],
+            "parameters": [{
+                "description": "Internal identifier for biblio record",
+                "in": "path",
+                "name": "biblionumber",
+                "required": true,
+                "type": "integer"
+            }],
+            "produces": [
+                "application/json"
+            ],
+            "responses": {
+                "200": {
+                    "description": "return items requestable from warehouse"
+                },
+                "404": {
+                    "description": "An error occured",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "error": {
+                                "description": "An explanation for the error",
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "502": {
+                    "description": "An error occured",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "error": {
+                                "description": "An explanation for the error",
+                                "type": "string"
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -733,7 +779,7 @@
             },
             "x-koha-authorization": {
                 "permissions": {
-                    "catalogue": "1"
+                    "circulate": "circulate_remaining_permissions"
                 }
             }
         }

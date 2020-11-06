@@ -22,6 +22,7 @@ use Authen::CAS::Client;
 use Koha::AuthorisedValues;
 use Koha::Items;
 use Koha::Library;
+
 use Koha::Plugin::Fr::UnivRennes2::WRM;
 use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequest;
 use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests;
@@ -75,6 +76,50 @@ sub update_status {
     );
 }
 
+sub check_requestable_items {
+    my $c = shift->openapi->valid_input or return;
+    
+    my $wr = Koha::Plugin::Fr::UnivRennes2::WRM->new();
+        
+    my $biblionumber = $c->validation->param('biblionumber');
+    my $biblio = Koha::Biblios->find($biblionumber);
+    
+    my @warehouse_locations;
+    if (my $wloc = $wr->retrieve_data('warehouse_locations')) {
+        @warehouse_locations = split(',', $wloc);
+    }
+    
+    my @warehouse_branches;
+    if (my $wlib = $wr->retrieve_data('warehouse_branches')) {
+        @warehouse_branches = split(',', $wlib);
+    }
+    
+    my $criterias = {
+        biblionumber => $biblionumber,
+        location => \@warehouse_locations,
+        homebranch => \@warehouse_branches
+    };
+    
+    if ($biblio->itemtype ne 'REVUE') {
+#         $criterias->{itemnumber} = {
+#             'NOT IN' => \"(SELECT itemnumber FROM warehouse_requests WHERE status NOT IN ('COMPLETED','CANCELED'))"
+#         };
+        $criterias->{onloan} = undef
+    }
+    
+    my @items = Koha::Items->search($criterias);
+    
+    
+    @items = map { _item_to_api( $_ ) } @items;
+    
+#     unless ($items) {
+#         return $c->render( status => 404, openapi => { error => "Object not found." } );
+#     }
+#     
+    return $c->render( status => 200, openapi =>  \@items );
+   
+   }
+
 sub request {
     my $c = shift->openapi->valid_input or return;
     
@@ -121,6 +166,7 @@ sub request {
     my $year         = $c->validation->param('year') // '';
     my $message      = $c->validation->param('message');
     
+    
     my $branchcode = "BU";
     
     my $item;
@@ -134,28 +180,16 @@ sub request {
             );
         }
         $item = Koha::Items->search({
-            biblionumber => $biblionumber,
-            homebranch => $branchcode
+            biblionumber => $biblionumber
         })->single();
     } else {
         $item = Koha::Items->find({ itemnumber => $itemnumber });
-        if (Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search({
-            borrowernumber => $user->borrowernumber,
-            itemnumber => $item->itemnumber,
-            status => 'PENDING'
-        })->count > 0) {
-            return $c->render(
-                status => 200,
-                data => "$callback({state:'failed',error:'ALREADY_REQUESTED'});",
-                format => $contenttype
-            );
-        }
     }
     
-    if ( $user->is_expired ) {
+    if ( $user->is_expired || $user->is_debarred ) {
         return $c->render(
             status => 200,
-            data => "$callback({state:'failed',error:'USER_NOT_ALLOWED'});",
+            data => "$callback({state:'failed',error:'USER_NOT_FOUND'});",
             format => $contenttype
         );
     }
@@ -250,7 +284,9 @@ sub _to_api {
         "author" => $biblio->author
     };
     $request->{item} = {
+        "holdingbranch" => $item->holding_branch->branchname,
         "location" => Koha::AuthorisedValues->find_by_koha_field( { kohafield => 'items.location', authorised_value => $item->location } )->lib,
+        "itemtype" => Koha::ItemTypes->find( $item->effective_itemtype )->description,
         "itemcallnumber" => $item->itemcallnumber,
         "barcode" => $item->barcode
     };
@@ -263,6 +299,20 @@ sub _to_api {
     }
     $request->{statusstr} = Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::GetStatusLabel($request->{status});
     return $request;
+}
+
+
+sub _item_to_api {
+    my ($item) = @_;
+    my $obj = {
+	    "itemnumber" => $item->itemnumber,
+        "holdingbranch" => $item->holding_branch->branchname,
+        "location" => Koha::AuthorisedValues->find_by_koha_field( { kohafield => 'items.location', authorised_value => $item->location } )->lib,
+        "itemtype" => Koha::ItemTypes->find( $item->effective_itemtype )->description,
+        "itemcallnumber" => $item->itemcallnumber,
+        "barcode" => $item->barcode
+    };
+    return $obj;
 }
 
 1;

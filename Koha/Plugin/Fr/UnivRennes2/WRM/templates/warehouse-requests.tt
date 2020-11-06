@@ -15,7 +15,7 @@
       $(document).ready(function() {
          $("#warehouse-requests-pending-table,#warehouse-requests-processing-table,#warehouse-requests-waiting-table").dataTable($.extend(true, {}, dataTablesDefaults, {
             "aoColumnDefs": [
-               { "bVisible": false, "aTargets": [ 3,5 ] },
+//                { "bVisible": false, "aTargets": [ 3,5 ] },
                { "bSortable": true, "aTargets": ["_all"] },             
                { "sType": "wr-date", "aTargets" : [ "wr-date" ] },
                { "sType": "wr-title", "aTargets" : [ "wr-title" ] }
@@ -384,6 +384,7 @@
                               <th class="wr-id">N°</th>
                               <th class="wr-title">Notice</th>
                               <th class="wr-request">Informations complémentaires</th>
+                              <th class="wr-holdingbranch">Site</th>
                               <th class="wr-itemtype">Type de document</th>
                               <th class="wr-callnumber">Cote</th>
                               <th class="wr-barcode">Code à barres</th>
@@ -418,7 +419,8 @@
                               ( wr.date ? '<p><strong>Date&nbsp;:</strong> '+wr.date+'</p>' : '') +
                               ( wr.patron_notes ? '<p><strong>Autre information&nbsp;:</strong> '+wr.patron_notes+'</p>' : '') +
                            `</td>
-                           <td class="wr-itemtype">[% ItemTypes.GetDescription( wr.item.effective_itemtype ) %]</td>
+                          <td class="wr-holdingbranch">`+wr.item.holdingbranch+`</td>
+                           <td class="wr-itemtype">`+wr.item.itemtype+`</td>
                            <td class="wr-callnumber">`+
                               ( wr.item.location != '' ? '<em>'+wr.item.location+'</em> ' : '') +
                               wr.item.itemcallnumber+
@@ -454,7 +456,7 @@
                   });
                   $('#warehouse-requests-'+status+'-table').dataTable($.extend(true, {}, dataTablesDefaults, {
                      "aoColumnDefs": [
-                        { "bVisible": false, "aTargets": [ 3,5 ] },
+//                         { "bVisible": false, "aTargets": [ 3,5 ] },
                         { "bSortable": true, "aTargets": ["_all"] },             
                         { "sType": "wr-date", "aTargets" : [ "wr-date" ] },
                         { "sType": "wr-title", "aTargets" : [ "wr-title" ] }
@@ -481,7 +483,7 @@
    <div id="bd">
       <div id="yui-main">
          <div class="yui-b">
-            <h1>Demandes magasin</h1>
+            <h1>Demandes différees</h1>
             <!-- <form id="wr-branchcode-form" method="post">
                <select name="branchcode" id="branchcode">
                   <option value="">Tous les sites</option>
@@ -538,20 +540,22 @@
                               <th class="wr-id">N°</th>
                               <th class="wr-title">Notice</th>
                               <th class="wr-request">Informations complémentaires</th>
+                              <th class="wr-holdingbranch">Site</th>
                               <th class="wr-itemtype">Type de document</th>
                               <th class="wr-callnumber">Cote</th>
                               <th class="wr-barcode">Code à barres</th>
                               <th class="wr-patron">Adhérent</th>
                               <th class="wr-date">Dates</th>
-                              <!-- <th class="wr-actions">Actions</th> -->
                            </tr>
                         </thead>
                         <tbody>
                            [% FOREACH wr IN warehouse_requests_pending %]
                            <tr class="wr-row wr-pending">
+						    <!-- Id -->
                               <td class="wr-id">
-                                 [% wr.id %] <input type="checkbox" name="id" value="[% wr.id %]">
+                                 [% wr.id %] <input type="checkbox" name="id" value="[% wr.id %]"> 
                               </td>
+                            <!-- title -->  
                               <td class="wr-title">
                                  <p>
                                     <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% wr.biblionumber %]">
@@ -567,6 +571,7 @@
                                  </div>
                                  </p>
                               </td>
+                            <!-- request -->   
                               <td class="wr-request">
                                  [% IF wr.volume %] 
                                  <p><strong>Volume(s)&nbsp;:</strong> [% wr.volume %] </p>
@@ -581,14 +586,22 @@
                                  <p><strong>Autre information&nbsp;:</strong> [% wr.patron_notes %] </p>
                                  [% END %]
                               </td>
+                            <!-- holdingbranch -->  
+                              <td class="wr-holdingbranch">
+                                 [% Branches.GetName ( wr.item.holdingbranch ) | html %]
+                              </td>
+                            <!-- itemtype --> 
                               <td class="wr-itemtype">[% ItemTypes.GetDescription( wr.item.effective_itemtype ) %]</td>
+                            <!-- callnumber -->   
                               <td class="wr-callnumber">
                                  [% IF wr.item.location %]
                                  <em>[% AuthorisedValues.GetByCode( 'LOC', wr.item.location ) %]</em>
                                  [% END %]
                                  [% wr.item.itemcallnumber %]
                               </td>
+                            <!-- barcode -->   
                               <td class="wr-barcode">[% wr.item.barcode %]</td>
+                            <!-- patron -->    
                               <td class="wr-patron">
                                  <p>
                                     <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% wr.borrower.borrowernumber %]">
@@ -598,6 +611,7 @@
                                  [% IF wr.patron_name %]<p>[% wr.patron_name %]</p>[% END %]
                                  [% IF wr.borrower.phone %]<p>[% wr.borrower.phone %]</p>[% END %]
                               </td>
+                            <!-- date --> 
                               <td class="wr-date">
                                  <div>Création : [% wr.created_on | $KohaDates with_hours => 1 %]</div>
                                  <div>Mise à jour : [% wr.updated_on | $KohaDates with_hours => 1 %]</div>
@@ -653,6 +667,7 @@
                               <th class="wr-id">N°</th>
                               <th class="wr-title">Notice</th>
                               <th class="wr-request">Informations complémentaires</th>
+                              <th class="wr-holdingbranch">Site</th>
                               <th class="wr-itemtype">Type de document</th>
                               <th class="wr-callnumber">Cote</th>
                               <th class="wr-barcode">Code à barres</th>
@@ -695,6 +710,9 @@
                                  [% IF wr.patron_notes %] 
                                  <p><strong>Autre information&nbsp;:</strong> [% wr.patron_notes %] </p>
                                  [% END %]
+                              </td>
+                             <td class="wr-holdingbranch">
+                                 [% Branches.GetName ( wr.item.holdingbranch ) | html %]
                               </td>
                               <td class="wr-itemtype">[% ItemTypes.GetDescription( wr.item.effective_itemtype ) %]</td>
                               <td class="wr-callnumber">
@@ -780,6 +798,7 @@
                               <th class="wr-id">N°</th>
                               <th class="wr-title">Notice</th>
                               <th class="wr-request">Informations complémentaires</th>
+                              <th class="wr-holdingbranch">Site</th>
                               <th class="wr-itemtype">Type de document</th>
                               <th class="wr-callnumber">Cote</th>
                               <th class="wr-barcode">Code à barres</th>
@@ -823,6 +842,7 @@
                                  <p><strong>Autre information&nbsp;:</strong> [% wr.patron_notes %] </p>
                                  [% END %]
                               </td>
+                              <td class="wr-holdingbranch">[% Branches.GetName ( wr.item.holdingbranch ) | html %]</td>
                               <td class="wr-itemtype">[% ItemTypes.GetDescription( wr.item.effective_itemtype ) %]</td>
                               <td class="wr-callnumber">
                                  [% IF wr.item.location %]
