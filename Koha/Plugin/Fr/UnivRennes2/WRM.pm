@@ -33,7 +33,7 @@ our $metadata = {
     name            => 'Demandes magasin',
     author          => 'Sicot Julien/Joncour Gwendal',
     date_authored   => '2019-06-25',
-    date_updated    => '2019-11-06',
+    date_updated    => '{UPDATE_DATE}',
     minimum_version => '18.110000',
     maximum_version => undef,
     version         => $VERSION,
@@ -122,7 +122,7 @@ sub creation {
     
     if ($biblio->itemtype ne 'REVUE') {
         $criterias->{itemnumber} = {
-            'NOT IN' => \"(SELECT itemnumber FROM warehouse_requests WHERE status NOT IN ('COMPLETED','CANCELED'))"
+            'NOT IN' => \"(SELECT itemnumber FROM warehouse_requests WHERE status NOT IN ('COMPLETED','CANCELED') AND itemnumber IS NOT NULL)"
         };
         $criterias->{onloan} = undef
     }

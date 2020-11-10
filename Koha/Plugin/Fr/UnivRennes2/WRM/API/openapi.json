@@ -7,34 +7,32 @@
             "produces": [
                 "application/json"
             ],
-            "parameters": [
-                {
-                    "name": "id",
-                    "in": "formData",
-                    "description": "Internal warehouse request identifier",
-                    "required": true,
-                    "type": "integer"
-                },{
-                    "name": "action",
-                    "in": "formData",
-                    "description": "Action to process to the warehouse request",
-                    "required": true,
-                    "type": "string",
-                    "enum": [
-                        "process",
-                        "wait",
-                        "complete",
-                        "cancel"
-                    ],
-                    "default": "process"
-                },{
-                    "name": "notes",
-                    "in": "formData",
-                    "description": "Reasons to cancelation",
-                    "required": false,
-                    "type": "string"
-                }
-            ],
+            "parameters": [{
+                "name": "id",
+                "in": "formData",
+                "description": "Internal warehouse request identifier",
+                "required": true,
+                "type": "integer"
+            }, {
+                "name": "action",
+                "in": "formData",
+                "description": "Action to process to the warehouse request",
+                "required": true,
+                "type": "string",
+                "enum": [
+                    "process",
+                    "wait",
+                    "complete",
+                    "cancel"
+                ],
+                "default": "process"
+            }, {
+                "name": "notes",
+                "in": "formData",
+                "description": "Reasons to cancelation",
+                "required": false,
+                "type": "string"
+            }],
             "responses": {
                 "200": {
                     "description": "Successness of the status update",
@@ -87,7 +85,7 @@
             },
             "x-koha-authorization": {
                 "permissions": {
-                    "circulate": "1"
+                    "plugins": "tool"
                 }
             }
         }
@@ -100,69 +98,67 @@
             "produces": [
                 "application/json"
             ],
-            "parameters": [
-                {
-                    "name": "biblionumber",
-                    "in": "query",
-                    "description": "Requesteditem biblionumber",
-                    "required": false,
-                    "type": "integer"
-                },{
-                    "name": "itemnumber",
-                    "in": "query",
-                    "description": "Requested item itemnumber",
-                    "required": false,
-                    "type": "string"
-                },{
-                    "name": "callnumber",
-                    "in": "query",
-                    "description": "Requested item callnumber",
-                    "required": false,
-                    "type": "string"
-                },{
-                    "name": "type",
-                    "in": "query",
-                    "description": "Requested item type",
-                    "required": false,
-                    "type": "string"
-                },{
-                    "name": "volume",
-                    "in": "query",
-                    "description": "Requested item volume",
-                    "required": false,
-                    "type": "string"
-                },{
-                    "name": "issue",
-                    "in": "query",
-                    "description": "Requested item issue",
-                    "required": false,
-                    "type": "string"
-                },{
-                    "name": "year",
-                    "in": "query",
-                    "description": "Requested item year",
-                    "required": false,
-                    "type": "string"
-                },{
-                    "name": "message",
-                    "in": "query",
-                    "description": "Request comment",
-                    "required": false,
-                    "type": "string"
-                },{
-                    "name": "ticket",
-                    "in": "query",
-                    "description": "CAS ticket",
-                    "required": false,
-                    "type": "string"
-                },{
-                    "name": "callback",
-                    "in": "query",
-                    "description": "JSONP Callback",
-                    "required": false,
-                    "type": "string"
-                }
-            ],
+            "parameters": [{
+                "name": "biblionumber",
+                "in": "query",
+                "description": "Requesteditem biblionumber",
+                "required": false,
+                "type": "integer"
+            }, {
+                "name": "itemnumber",
+                "in": "query",
+                "description": "Requested item itemnumber",
+                "required": false,
+                "type": "string"
+            }, {
+                "name": "callnumber",
+                "in": "query",
+                "description": "Requested item callnumber",
+                "required": false,
+                "type": "string"
+            }, {
+                "name": "type",
+                "in": "query",
+                "description": "Requested item type",
+                "required": false,
+                "type": "string"
+            }, {
+                "name": "volume",
+                "in": "query",
+                "description": "Requested item volume",
+                "required": false,
+                "type": "string"
+            }, {
+                "name": "issue",
+                "in": "query",
+                "description": "Requested item issue",
+                "required": false,
+                "type": "string"
+            }, {
+                "name": "year",
+                "in": "query",
+                "description": "Requested item year",
+                "required": false,
+                "type": "string"
+            }, {
+                "name": "message",
+                "in": "query",
+                "description": "Request comment",
+                "required": false,
+                "type": "string"
+            }, {
+                "name": "ticket",
+                "in": "query",
+                "description": "CAS ticket",
+                "required": false,
+                "type": "string"
+            }, {
+                "name": "callback",
+                "in": "query",
+                "description": "JSONP Callback",
+                "required": false,
+                "type": "string"
+            }],
             "responses": {
                 "200": {
                     "description": "Successness of the creation",
@@ -218,11 +214,11 @@
                                     "description": "Item informations of the document",
                                     "properties": {
                                         "location": {
-                                            "type": ["string","null"],
+                                            "type": ["string", "null"],
                                             "description": "Location of the requested item"
                                         },
                                         "itemcallnumber": {
-                                            "type": ["string","null"],
+                                            "type": ["string", "null"],
                                             "description": "Callnumber of the requested item"
                                         }
                                     }
@@ -232,11 +228,11 @@
                                     "description": "Biblio informations of the document",
                                     "properties": {
                                         "title": {
-                                            "type": ["string","null"],
+                                            "type": ["string", "null"],
                                             "description": "Title of the requested item"
                                         },
                                         "author": {
-                                            "type": ["string","null"],
+                                            "type": ["string", "null"],
                                             "description": "Author of the requested item"
                                         }
                                     }
@@ -341,15 +337,13 @@
             "produces": [
                 "application/json; charset=utf-8"
             ],
-            "parameters": [
-                {
-                    "name": "borrowernumber",
-                    "in": "path",
-                    "description": "Internal borrower identifier",
-                    "required": true,
-                    "type": "integer"
-                }
-            ],
+            "parameters": [{
+                "name": "borrowernumber",
+                "in": "path",
+                "description": "Internal borrower identifier",
+                "required": true,
+                "type": "integer"
+            }],
             "responses": {
                 "200": {
                     "description": "List of the requests",
@@ -389,7 +383,7 @@
                                             "description": "Title of the requested item"
                                         },
                                         "author": {
-                                            "type": ["string","null"],
+                                            "type": ["string", "null"],
                                             "description": "Author of the requested item"
                                         }
                                     }
@@ -483,7 +477,7 @@
             },
             "x-koha-authorization": {
                 "permissions": {
-                    "circulate": "circulate_remaining_permissions"
+                    "borrowers": "view_borrower_infos_from_any_libraries"
                 }
             }
         }
@@ -496,22 +490,20 @@
             "produces": [
                 "application/json; charset=utf-8"
             ],
-            "parameters": [
-                {
-                    "name": "status",
-                    "in": "path",
-                    "description": "WR Status",
-                    "required": true,
-                    "type": "string",
-                    "enum": [
-                        "PENDING",
-                        "PROCESSING",
-                        "WAITING",
-                        "COMPLETED",
-                        "CANCELED"
-                    ]
-                }
-            ],
+            "parameters": [{
+                "name": "status",
+                "in": "path",
+                "description": "WR Status",
+                "required": true,
+                "type": "string",
+                "enum": [
+                    "PENDING",
+                    "PROCESSING",
+                    "WAITING",
+                    "COMPLETED",
+                    "CANCELED"
+                ]
+            }],
             "responses": {
                 "200": {
                     "description": "List of the requests",
@@ -541,7 +533,7 @@
                                             "description": "Callnumber of the requested item"
                                         },
                                         "barcode": {
-                                            "type": ["string","null"],
+                                            "type": ["string", "null"],
                                             "description": "Barcode of the requested item"
                                         }
                                     }
@@ -559,11 +551,11 @@
                                             "description": "Surname of the requester"
                                         },
                                         "firstname": {
-                                            "type": ["string","null"],
+                                            "type": ["string", "null"],
                                             "description": "Firstname of the requester"
                                         },
                                         "phone": {
-                                            "type": ["string","null"],
+                                            "type": ["string", "null"],
                                             "description": "Phone number of the requester"
                                         }
                                     }
@@ -577,7 +569,7 @@
                                             "description": "Title of the requested item"
                                         },
                                         "author": {
-                                            "type": ["string","null"],
+                                            "type": ["string", "null"],
                                             "description": "Author of the requested item"
                                         }
                                     }
@@ -671,7 +663,7 @@
             },
             "x-koha-authorization": {
                 "permissions": {
-                    "circulate": "circulate_remaining_permissions"
+                    "plugins": "tool"
                 }
             }
         }
@@ -730,15 +722,13 @@
             "produces": [
                 "application/json; charset=utf-8"
             ],
-            "parameters": [
-                {
-                    "name": "biblionumber",
-                    "in": "query",
-                    "description": "Internal bilbionumber identifier",
-                    "required": false,
-                    "type": "integer"
-                }
-            ],
+            "parameters": [{
+                "name": "biblionumber",
+                "in": "query",
+                "description": "Internal bilbionumber identifier",
+                "required": false,
+                "type": "integer"
+            }],
             "responses": {
                 "200": {
                     "description": "List of the requests",
@@ -779,7 +769,7 @@
             },
             "x-koha-authorization": {
                 "permissions": {
-                    "circulate": "circulate_remaining_permissions"
+                    "catalogue": "1"
                 }
             }
         }

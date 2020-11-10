@@ -22,7 +22,6 @@ use Authen::CAS::Client;
 use Koha::AuthorisedValues;
 use Koha::Items;
 use Koha::Library;
-
 use Koha::Plugin::Fr::UnivRennes2::WRM;
 use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequest;
 use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests;
@@ -165,9 +164,7 @@ sub request {
     my $issue        = $c->validation->param('issue') // '';
     my $year         = $c->validation->param('year') // '';
     my $message      = $c->validation->param('message');
-    
-    
-    my $branchcode = "BU";
+    my $branchcode   = $c->validation->param('branchcode');
     
     my $item;
     
@@ -184,12 +181,23 @@ sub request {
         })->single();
     } else {
         $item = Koha::Items->find({ itemnumber => $itemnumber });
+                if (Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search({
+            borrowernumber => $user->borrowernumber,
+            itemnumber => $item->itemnumber,
+            status => 'PENDING'
+        })->count > 0) {
+            return $c->render(
+                status => 200,
+                data => "$callback({state:'failed',error:'ALREADY_REQUESTED'});",
+                format => $contenttype
+            );
+        }
     }
     
-    if ( $user->is_expired || $user->is_debarred ) {
+    if ( $user->is_expired ) {
         return $c->render(
             status => 200,
-            data => "$callback({state:'failed',error:'USER_NOT_FOUND'});",
+            data => "$callback({state:'failed',error:'USER_NOT_ALLOWED'});",
             format => $contenttype
         );
     }

@@ -1,4 +1,4 @@
 PROJECTNAME="koha-plugin-warehouse-request"
 FILEPATH="Koha/Plugin/Fr/UnivRennes2"
 FILENAME="WRM.pm"
-VERSION="1.0"
+VERSION="1.1"
