@@ -117,6 +117,12 @@
                 "required": false,
                 "type": "string"
             }, {
+                "name": "branchcode",
+                "in": "query",
+                "description": "Request branchcode",
+                "required": false,
+                "type": "string"
+            }, {
                 "name": "type",
                 "in": "query",
                 "description": "Requested item type",

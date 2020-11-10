@@ -484,7 +484,9 @@
       <div id="yui-main">
          <div class="yui-b">
             <h1>Demandes différees</h1>
-            <!-- <form id="wr-branchcode-form" method="post">
+            <form id="wr-branchcode-form" method="get">
+		       <input type="hidden" name="class" value="Koha::Plugin::Fr::UnivRennes2::WRM" />
+			   <input type="hidden" name="method" value="tool" />
                <select name="branchcode" id="branchcode">
                   <option value="">Tous les sites</option>
                   [% FOREACH b IN Branches.all %]
@@ -497,7 +499,8 @@
                </select>
                <button type="submit" class="btn btn-xs" type="submit">
                <i class="fa fa-refresh"></i> Mettre à jour</button>
-            </form> -->
+            </form> 
+
             <div id="warehouse-request-tabs" class="toptabs">
                <ul>
                   <li>
