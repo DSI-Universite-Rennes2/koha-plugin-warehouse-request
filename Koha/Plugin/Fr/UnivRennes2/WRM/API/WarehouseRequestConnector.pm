@@ -83,20 +83,32 @@ sub check_requestable_items {
     my $biblionumber = $c->validation->param('biblionumber');
     my $biblio = Koha::Biblios->find($biblionumber);
     
-    my @warehouse_locations;
-    if (my $wloc = $wr->retrieve_data('warehouse_locations')) {
-        @warehouse_locations = split(',', $wloc);
-    }
-    
     my @warehouse_branches;
-    if (my $wlib = $wr->retrieve_data('warehouse_branches')) {
+    if (my $wlib = $self->retrieve_data('warehouse_branches')) {
         @warehouse_branches = split(',', $wlib);
     }
     
+    my @warehouse_locations;
+    if (my $wloc = $self->retrieve_data('warehouse_locations')) {
+        @warehouse_locations = split(',', $wloc);
+    }
+    
+    my @warehouse_itemtypes;
+    if (my $wit = $self->retrieve_data('warehouse_itemtypes')) {
+        @warehouse_itemtypes = split(',', $wit);
+    }
+    
+    my @warehouse_notforloan;
+    if (my $wnfl = $self->retrieve_data('warehouse_notforloan')) {
+        @warehouse_notforloan = split(',', $wnfl);
+    }
+   
     my $criterias = {
         biblionumber => $biblionumber,
         location => \@warehouse_locations,
-        homebranch => \@warehouse_branches
+        homebranch => \@warehouse_branches,
+        itype => \@warehouse_itemtypes,
+        notforloan => \@warehouse_notforloan
     };
     
     if ($biblio->itemtype ne 'REVUE') {

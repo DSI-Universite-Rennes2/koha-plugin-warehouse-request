@@ -61,6 +61,23 @@
                                     [% END %]
                                 </select>
                             </li>
+                            <li>
+                                <label for="warehouse_itemtypes"><span class="label">Types à activer : </span></label>
+                                <select id="warehouse_itemtypes" name="warehouse_itemtypes" multiple>
+                                    [% FOREACH itemtype IN itemtypes %]
+										<option value="[% itemtype.itemtype | html %]"[% IF warehouse_itemtypes.grep('^' _ itemtype.itemtype _ '$').size %] selected="selected"[% END %]>[% itemtype.translated_description | html %] </option>
+
+                                    [% END %]
+                                </select>
+                            </li>
+                            <li>
+                                <label for="warehouse_notforloan"><span class="label">Statuts à activer : </span></label>
+                                <select id="warehouse_notforloan" name="warehouse_notforloan" multiple>
+                                    [% FOREACH n IN notforloan %]
+                                    <option value="[% n.code %]"[% IF warehouse_notforloan.grep('^' _ n.code _ '$').size %] selected="selected"[% END %]>[% n.description %]</option>
+                                    [% END %]
+                                </select>
+                            </li>
                         </ol>
                     </div>
                     <div class="rows">
