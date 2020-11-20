@@ -211,6 +211,50 @@ sub creation {
     $self->output_html( $template->output );
 }
 
+sub item_is_requestable {
+    my ( $self, $itemnumber, $biblionumber ) = @_;
+	my $wr = Koha::Plugin::Fr::UnivRennes2::WRM->new();
+
+    
+    my @warehouse_branches;
+    if (my $wlib = $wr->retrieve_data('warehouse_branches')) {
+        @warehouse_branches = split(',', $wlib);
+    }
+    
+    my @warehouse_locations;
+    if (my $wloc = $wr->retrieve_data('warehouse_locations')) {
+        @warehouse_locations = split(',', $wloc);
+    }
+    
+    my @warehouse_itemtypes;
+    if (my $wit = $wr->retrieve_data('warehouse_itemtypes')) {
+        @warehouse_itemtypes = split(',', $wit);
+    }
+    
+    my @warehouse_notforloan;
+    if (my $wnfl = $wr->retrieve_data('warehouse_notforloan')) {
+        @warehouse_notforloan = split(',', $wnfl);
+    }
+   
+    my $criterias = {
+# 	    biblionumber => $biblionumber,
+	    itemnumber => $itemnumber,
+	    biblionumber => $biblionumber,
+        location => \@warehouse_locations,
+        homebranch => \@warehouse_branches,
+        itype => \@warehouse_itemtypes,
+        notforloan => \@warehouse_notforloan
+    };
+	$criterias->{itemnumber} = {
+            'NOT IN' => \"(SELECT itemnumber FROM warehouse_requests WHERE status NOT IN ('COMPLETED','CANCELED'))"
+        };
+    $criterias->{onloan} = undef;
+
+             return  Koha::Items->search( $criterias )->count;
+# 			  return $itemnumber+ " " +$biblionumber;
+   }
+
+
 sub ticket {
     my ( $self, $args ) = @_;
     
@@ -585,10 +629,10 @@ sub configure {
         my $myconf;
         $myconf->{days_to_keep} = $cgi->param('days_to_keep');
         $myconf->{days_since_archived} = $cgi->param('days_since_archived');
-        $myconf->{warehouse_branches} = join(",", $cgi->multi_param('warehouse_branches'));
+        $myconf->{warehouse_branches} = join(",", $cgi->multi_param('warehouse_branches')); 
         $myconf->{warehouse_locations} = join(",", $cgi->multi_param('warehouse_locations'));
         $myconf->{warehouse_itemtypes} = join(",", $cgi->multi_param('warehouse_itemtypes'));
-        $myconf->{warehouse_notforloan} = join(",", $cgi->multi_param('warehouse_notforloan'));
+        $myconf->{warehouse_notforloan} = join(",", $cgi->multi_param('warehouse_notforloan'));               
         $myconf->{rmq_server} = $cgi->param('rmq_server');
         $myconf->{rmq_port} = $cgi->param('rmq_port');
         $myconf->{rmq_vhost} = $cgi->param('rmq_vhost');
@@ -607,39 +651,40 @@ sub configure {
             $template->param( 'config_success' => 'La configuration du plugin a été enregistrée avec succès !' );
         }
     }
-
+    
     my @warehouse_branches;
     if (my $wlib = $self->retrieve_data('warehouse_branches')) {
         @warehouse_branches = split(',', $wlib);
     }
     my $branches = Koha::Libraries->search( {}, { order_by => ['branchname'] } )->unblessed;
-
+      
     my @warehouse_locations;
     if (my $wloc = $self->retrieve_data('warehouse_locations')) {
         @warehouse_locations = split(',', $wloc);
     }
-    my $locations = my $locations = { map { ( $_->{authorised_value} => $_->{lib} ) } Koha::AuthorisedValues->get_descriptions_by_koha_field( { frameworkcode => '', kohafield => 'items.location' }, { order_by => ['description'] } ) };
+    my $locations = { map { ( $_->{authorised_value} => $_->{lib} ) } Koha::AuthorisedValues->get_descriptions_by_koha_field( { frameworkcode => '', kohafield => 'items.location' }, { order_by => ['description'] } ) };
     my @locations;
 	foreach (sort keys %$locations) {
 		push @locations, { code => $_, description => "$_ - " . $locations->{$_} };
 	}
-
+		
 	my @warehouse_itemtypes;
     if (my $wit = $self->retrieve_data('warehouse_itemtypes')) {
         @warehouse_itemtypes = split(',', $wit);
     }
 	my $itemtypes = Koha::ItemTypes->search_with_localization;
     my %itemtypes = map { $_->{itemtype} => $_ } @{ $itemtypes->unblessed };
-
+    
     my @warehouse_notforloan;
     if (my $wnfl = $self->retrieve_data('warehouse_notforloan')) {
         @warehouse_notforloan = split(',', $wnfl);
     }
-    my $notforloan = my $notforloan= { map { ( $_->{authorised_value} => $_->{lib} ) } Koha::AuthorisedValues->get_descriptions_by_koha_field( { frameworkcode => '', kohafield => 'items.notforloan' }, { order_by => ['description'] } ) };
+    my $notforloan= { map { ( $_->{authorised_value} => $_->{lib} ) } Koha::AuthorisedValues->get_descriptions_by_koha_field( { frameworkcode => '', kohafield => 'items.notforloan' }, { order_by => ['description'] } ) };
     my @notforloan ;
 	foreach (sort keys %$notforloan ) {
 		push @notforloan , { code => $_, description => $notforloan->{$_} };
 	}
+
 
     $template->param(
         'days_to_keep' => $self->retrieve_data('days_to_keep'),
