@@ -84,22 +84,22 @@ sub check_requestable_items {
     my $biblio = Koha::Biblios->find($biblionumber);
     
     my @warehouse_branches;
-    if (my $wlib = $self->retrieve_data('warehouse_branches')) {
+    if (my $wlib = $wr->retrieve_data('warehouse_branches')) {
         @warehouse_branches = split(',', $wlib);
     }
     
     my @warehouse_locations;
-    if (my $wloc = $self->retrieve_data('warehouse_locations')) {
+    if (my $wloc = $wr->retrieve_data('warehouse_locations')) {
         @warehouse_locations = split(',', $wloc);
     }
     
     my @warehouse_itemtypes;
-    if (my $wit = $self->retrieve_data('warehouse_itemtypes')) {
+    if (my $wit = $wr->retrieve_data('warehouse_itemtypes')) {
         @warehouse_itemtypes = split(',', $wit);
     }
     
     my @warehouse_notforloan;
-    if (my $wnfl = $self->retrieve_data('warehouse_notforloan')) {
+    if (my $wnfl = $wr->retrieve_data('warehouse_notforloan')) {
         @warehouse_notforloan = split(',', $wnfl);
     }
    

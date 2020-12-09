@@ -3,32 +3,13 @@
 [% USE ItemTypes %]
 [% USE Branches %]
 [% USE AuthorisedValues %]
+[% SET footerjs = 1 %]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Circulation &rsaquo; Demandes magasin</title>
 [% INCLUDE 'doc-head-close.inc' %]
-<style type="text/css"> p { margin-top: 0; }</style>
-<link rel="stylesheet" type="text/css" href="[% interface %]/[% theme %]/css/datatables.css" />
-[% INCLUDE 'datatables.inc' %]
-<script type="text/javascript" src="[% interface %]/lib/jquery/plugins/jquery.checkboxes.min.js"></script>
-<script type="text/javascript">
-   //<![CDATA[
-      $(document).ready(function() {
-         $("#warehouse-requests-pending-table,#warehouse-requests-processing-table,#warehouse-requests-waiting-table").dataTable($.extend(true, {}, dataTablesDefaults, {
-            "aoColumnDefs": [
-//                { "bVisible": false, "aTargets": [ 3,5 ] },
-               { "bSortable": true, "aTargets": ["_all"] },             
-               { "sType": "wr-date", "aTargets" : [ "wr-date" ] },
-               { "sType": "wr-title", "aTargets" : [ "wr-title" ] }
-            ],
-            "aaSorting": [[ 0, 'desc' ]],
-            "sPaginationType": "four_button",
-            "autoWidth": false
-         }));
-      });
-   //]]>
-</script>
-<style type="text/css">
-   #warehouse-request-tabs table {
+<style type="text/css"> 
+	p { margin-top: 0; }
+	#warehouse-request-tabs table {
       width: 100%;
    }
    .wr-date {
@@ -41,11 +22,498 @@
    }
 </style>
 </head>
+
 <body id="circ_warehouse-requests" class="circ">
    [% INCLUDE 'header.inc' %]
    [% INCLUDE 'cat-search.inc' %]
-   <script type="text/javascript">
-      //<![CDATA[
+   
+    <div id="breadcrumbs">
+      <a href="/cgi-bin/koha/mainpage.pl">Accueil</a>
+      &rsaquo;
+      <a href="/cgi-bin/koha/circ/circulation-home.pl">Circulation</a>
+      &rsaquo;
+      Demandes magasin
+   </div>
+    <div class="main container-fluid starthidden">
+        <div class="row">
+            <div class="col-md-10 col-md-offset-1 col-lg-8 col-lg-offset-2">
+            <h1>Demandes différées</h1>
+            <form id="wr-branchcode-form" method="get">
+		       <input type="hidden" name="class" value="Koha::Plugin::Fr::UnivRennes2::WRM" />
+			   <input type="hidden" name="method" value="tool" />
+                    <select name="branchcode" id="branchcode">
+                        <option value="">Tous les sites</option>
+                        [% FOREACH b IN Branches.all( only_from_group => 1 ) %]
+                            [% IF b.branchcode == branchcode %]
+                                <option value="[% b.branchcode | html %]" selected="selected">[% b.branchname | html %]</option>
+                            [% ELSE %]
+                                <option value="[% b.branchcode | html %]">[% b.branchname | html %]</option>
+                            [% END %]
+                        [% END %]
+                    </select>
+               <button type="submit" class="btn btn-xs" type="submit">
+               <i class="fa fa-refresh"></i> Mettre à jour</button>
+            </form> 
+
+            <div id="warehouse-request-tabs" class="toptabs">
+               <ul>
+                  <li>
+                     <a href="#warehouse-requests-pending">
+                     En attente (<span id="wr_pending_count">[% warehouse_requests_pending.count %]</span>)
+                     </a>
+                  </li>
+                  <li>
+                     <a href="#warehouse-requests-processing">
+                     En traitement (<span id="wr_processing_count">[% warehouse_requests_processing.count %]</span>)
+                     </a>
+                  </li>
+                  <li>
+                     <a href="#warehouse-requests-waiting">
+                     Disponibles (<span id="wr_waiting_count">[% warehouse_requests_waiting.count %]</span>)
+                     </a>
+                  </li>
+                  <li>
+                     <a href="#warehouse-requests-canceled">
+                     Annulées<span id="wr_canceled_count"></span>
+                     </a>
+                  </li>
+                  <li>
+                     <a href="#warehouse-requests-completed">
+                     Terminées<span id="wr_completed_count"></span>
+                     </a>
+                  </li>
+               </ul>
+               
+               <div id="warehouse-requests-pending">
+                  <div class="wr-pending-none">
+                     <p>Il n'y as pas de demande en attente actuellement.</p>
+                  </div>
+                  <div class="wr-requests-pending_table_controls">
+	                  <a href="#" class="SelectAll"><i class="fa fa-check"></i> Tout sélectionner</a> | <a href="#" class="ClearAll"><i class="fa fa-remove"></i> Tout désélectionner</a>
+                  </div>
+                  
+                  <form id="f-wr-pending" name="f-wr-pending" method="post" class="wr-form" action="">
+                     <input type="hidden" name="type" value="manual"/>
+                     <input type="hidden" name="reqtype" value="pending"/>
+                     <table id="warehouse-requests-pending-table">
+                        <thead>
+                           <tr>
+                              <th class="wr-id">N°</th>
+                              <th class="wr-title">Notice</th>
+                              <th class="wr-request">Informations complémentaires</th>
+                              <th class="wr-holdingbranch">Site</th>
+                              <th class="wr-itemtype">Type de document</th>
+                              <th class="wr-callnumber">Cote</th>
+                              <th class="wr-barcode">Code à barres</th>
+                              <th class="wr-patron">Adhérent</th>
+                              <th class="wr-date">Dates</th>
+                           </tr>
+                        </thead>
+                        <tbody>
+                           [% FOREACH wr IN warehouse_requests_pending %]
+                           <tr class="wr-row wr-pending">
+						    <!-- Id -->
+                              <td class="wr-id">
+                                 [% wr.id %] <input type="checkbox" name="id" value="[% wr.id %]"> 
+                              </td>
+                            <!-- title -->  
+                              <td class="wr-title">
+                                 <p>
+                                    <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% wr.biblionumber %]">
+                                    <strong>[% wr.biblio.title | html %]</strong>
+                                    [% FOREACH s IN itemsloo.subtitle %] [% s %][% END %]
+                                    </a>
+                                 </p>
+                                 <p>
+                                 <div class="wr-biblionumber content_hidden">[% wr.biblionumber %]</div>
+                                 <div class="wr-author">[% wr.biblio.author %]</div>
+                                 <div class="wr-pubdata">
+                                    [% wr.biblio.biblioitem.publishercode %] [% IF wr.biblio.biblioitem.publicationyear %] [% wr.biblio.biblioitem.publicationyear %] [% ELSIF wr.biblio.copyrightdate %] [% wr.biblio.copyrightdate %] [% END %] [% IF wr.biblio.biblioitem.pages %] : [% wr.biblio.biblioitem.pages %] [% END %] [%  r.biblio.biblioitem.size %] [% IF wr.biblio.biblioitem.isbn %] ISBN&nbsp;: [% wr.biblio.biblioitem.isbn %] [% END %] 
+                                 </div>
+                                 </p>
+                              </td>
+                            <!-- request -->   
+                              <td class="wr-request">
+                                 [% IF wr.volume %] 
+                                 <p><strong>Volume(s)&nbsp;:</strong> [% wr.volume %] </p>
+                                 [% END %]
+                                 [% IF wr.issue %] 
+                                 <p><strong>Numéro(s)&nbsp;:</strong> [% wr.issue %] </p>
+                                 [% END %]
+                                 [% IF wr.date %] 
+                                 <p><strong>Date&nbsp;:</strong> [% wr.date %] </p>
+                                 [% END %]
+                                 [% IF wr.patron_notes %] 
+                                 <p><strong>Autre information&nbsp;:</strong> [% wr.patron_notes %] </p>
+                                 [% END %]
+                              </td>
+                            <!-- holdingbranch -->  
+                              <td class="wr-holdingbranch">
+                                 [% Branches.GetName ( wr.item.holdingbranch ) | html %]
+                              </td>
+                            <!-- itemtype --> 
+                              <td class="wr-itemtype">[% ItemTypes.GetDescription( wr.item.effective_itemtype ) %]</td>
+                            <!-- callnumber -->   
+                              <td class="wr-callnumber">
+                                 [% IF wr.item.location %]
+                                   <em>[% AuthorisedValues.GetDescriptionByKohaField( kohafield => 'items.location', authorised_value =>  wr.item.location ) | html %]</em>
+                                 [% END %]
+                                 [% wr.item.itemcallnumber %]
+                              </td>
+                            <!-- barcode -->   
+                              <td class="wr-barcode">[% wr.item.barcode %]</td>
+                            <!-- patron -->    
+                              <td class="wr-patron">
+                                 <p>
+                                    <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% wr.borrower.borrowernumber %]">
+                                    [% wr.borrower.surname %][% IF wr.borrower.firstname %], [% wr.borrower.firstname %][% END %]
+                                    </a>
+                                 </p>
+                                 [% IF wr.patron_name %]<p>[% wr.patron_name %]</p>[% END %]
+                                 [% IF wr.borrower.phone %]<p>[% wr.borrower.phone %]</p>[% END %]
+                              </td>
+                            <!-- date --> 
+                              <td class="wr-date">
+                                 <div>Création : [% wr.created_on | $KohaDates with_hours => 1 %]</div>
+                                 <div>Mise à jour : [% wr.updated_on | $KohaDates with_hours => 1 %]</div>
+                              </td>
+                              <!-- 
+                                 <td class="wr-actions">
+                                 <div class="dropdown">
+                                 <a class="btn btn-mini dropdown-toggle" id="wr-actions" role="button" data-toggle="dropdown" href="#">
+                                 Actions <b class="caret"></b>
+                                 </a>
+                                 <ul class="dropdown-menu pull-right" role="menu" aria-labelledby="wr-actions">
+                                 <li>
+                                 <a class="wr-process-request" href="#" onclick="Process( [% wr.id %], $(this) ); return false; ">
+                                 <i class="fa fa-cog"></i>
+                                 Process request
+                                 </a>
+                                 </li>
+                                 </ul>
+                                 </div>
+                                 </td>
+                                 --> 
+                           </tr>
+                           [% END %]
+                        </tbody>
+                     </table>
+                     <fieldset>
+                        <div id="select-status-wr-pending">
+                           <div id="status-wr-pending">
+                              <label for="action">Marquer les éléments sélectionnés comme: </label>
+                              <select name="action" id="action">
+                                 <option value=""> -- Choisir un état --</option>
+                                 <option value="process">En traitement</option>
+                              </select>
+                           </div>
+                        </div>
+                     </fieldset>
+                     <fieldset class="action">
+                        <input value="Valider" type="submit" />
+                     </fieldset>
+                  </form>
+               </div>
+               <div id="warehouse-requests-processing">
+                  <div class="wr-processing-none">
+                     <p>Il n'y as pas de demande en traitement actuellement.</p>
+                  </div>
+
+                  <div class="wr-requests-processing_table_controls">
+	                  <a href="#" class="SelectAll"><i class="fa fa-check"></i> Tout sélectionner</a> | <a href="#" class="ClearAll"><i class="fa fa-remove"></i> Tout désélectionner</a>
+                  </div>
+                  
+                  
+                  <form id="f-wr-processing" name="f-wr-processing" class="wr-form" method="post" action="">
+                     <input type="hidden" name="type" value="manual"/>
+                     <input type="hidden" name="reqtype" value="processing"/>
+                     <table id="warehouse-requests-processing-table">
+                        <thead>
+                           <tr>
+                              <th class="wr-id">N°</th>
+                              <th class="wr-title">Notice</th>
+                              <th class="wr-request">Informations complémentaires</th>
+                              <th class="wr-holdingbranch">Site</th>
+                              <th class="wr-itemtype">Type de document</th>
+                              <th class="wr-callnumber">Cote</th>
+                              <th class="wr-barcode">Code à barres</th>
+                              <th class="wr-patron">Adhérent</th>
+                              <th class="wr-date">Dates</th>
+                              <th class="wr-actions">Actions</th>
+                           </tr>
+                        </thead>
+                        <tbody>
+                           [% FOREACH wr IN warehouse_requests_processing %]
+                           <tr class="wr-row wr-processing">
+                              <td class="wr-id">
+                                 [% wr.id %] <input type="checkbox" name="id" value="[% wr.id %]">
+                              </td>
+                              <td class="wr-title">
+                                 <p>
+                                    <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% wr.biblionumber %]">
+                                    <strong>[% wr.biblio.title | html %]</strong>
+                                    [% FOREACH s IN itemsloo.subtitle %] [% s %][% END %]
+                                    </a>
+                                 </p>
+                                 <p>
+                                 <div class="wr-biblionumber content_hidden">[% wr.biblionumber %]</div>
+                                 <div class="wr-author">[% wr.biblio.author %]</div>
+                                 <div class="wr-pubdata">
+                                    [% wr.biblio.biblioitem.publishercode %] [% IF wr.biblio.biblioitem.publicationyear %] [% wr.biblio.biblioitem.publicationyear %] [% ELSIF wr.biblio.copyrightdate %] [% wr.biblio.copyrightdate %] [% END %] [% IF wr.biblio.biblioitem.pages %] : [% wr.biblio.biblioitem.pages %] [% END %] [%  r.biblio.biblioitem.size %] [% IF wr.biblio.biblioitem.isbn %] ISBN&nbsp;: [% wr.biblio.biblioitem.isbn %] [% END %] 
+                                 </div>
+                                 </p>
+                              </td>
+                              <td class="wr-request">
+                                 [% IF wr.volume %] 
+                                 <p><strong>Volume(s)&nbsp;:</strong> [% wr.volume %] </p>
+                                 [% END %]
+                                 [% IF wr.issue %] 
+                                 <p><strong>Numéro(s)&nbsp;:</strong> [% wr.issue %] </p>
+                                 [% END %]
+                                 [% IF wr.date %] 
+                                 <p><strong>Date&nbsp;:</strong> [% wr.date %] </p>
+                                 [% END %]
+                                 [% IF wr.patron_notes %] 
+                                 <p><strong>Autre information&nbsp;:</strong> [% wr.patron_notes %] </p>
+                                 [% END %]
+                              </td>
+                             <td class="wr-holdingbranch">
+                                 [% Branches.GetName ( wr.item.holdingbranch ) | html %]
+                              </td>
+                              <td class="wr-itemtype">[% ItemTypes.GetDescription( wr.item.effective_itemtype ) %]</td>
+                              <td class="wr-callnumber">
+                                 [% IF wr.item.location %]
+                                   <em>[% AuthorisedValues.GetDescriptionByKohaField( kohafield => 'items.location', authorised_value =>  wr.item.location ) | html %]</em>
+                                 [% END %]
+                                 [% wr.item.itemcallnumber %]
+                              </td>
+                              <td class="wr-barcode">[% wr.item.barcode %]</td>
+                              <td class="wr-patron">
+                                 <p>
+                                    <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% wr.borrower.borrowernumber %]">
+                                    [% wr.borrower.surname %][% IF wr.borrower.firstname %], [% wr.borrower.firstname %][% END %] 
+                                    </a>
+                                 </p>
+                                 [% IF wr.patron_name %]<p>[% wr.patron_name %]</p>[% END %]
+                                 [% IF wr.borrower.phone %]<p>[% wr.borrower.phone %]</p>[% END %]
+                              </td>
+                              <td class="wr-date">
+                                 <div>Création : [% wr.created_on | $KohaDates with_hours => 1 %]</div>
+                                 <div>Mise à jour : [% wr.updated_on | $KohaDates with_hours => 1 %]</div>
+                              </td>
+                              <td class="wr-actions">
+                                 <a class="wr-print-request btn btn-xs" href="#" id="[% wr.id %]">
+                                    <i class="fa fa-print"></i> Imprimer
+                                 </a>
+                              </td>
+                           </tr>
+                           [% END %]
+                        </tbody>
+                     </table>
+                     <fieldset>
+                        <div id="select-status-wr-processing">
+                           <div id="status-wr-processing">
+                              <label for="action">Marquer les éléments sélectionnés comme: </label>
+                              <select name="action" id="action">
+                                 <option value=""> -- Choisir un état --</option>
+                                 <option value="wait">Disponible</option>
+                                 <option value="cancel">Annulé</option>
+                              </select>
+                              <label for="reason-wr-processing">avec le message:</label>
+                              <select id="reason-wr-processing" name="reason-wr-processing">
+                                 <option value=""> -- Choisir -- </option>
+                                 [% FOREACH reasonsloo IN reasonsloop %]
+                                 <option value="[% reasonsloo.lib %]">[% reasonsloo.lib %]</option>
+                                 [% END %] 
+                                 <option value="other">Autres...</option>
+                              </select>
+                              <span id="other_reason-wr-processing">
+                              <input name="other_reason-wr-processing" placeholder="merci d'indiquer la raison ici..." id="select-other_reason-wr-processing" size="31" type="text" />
+                              <a href="#back-wr-processing">Annuler</a>
+                              </span>
+                           </div>
+                        </div>
+                     </fieldset>
+                     <fieldset class="action">
+                        <input type="submit" value="Valider" />
+                     </fieldset>
+                  </form>
+               </div>
+               <div id="warehouse-requests-waiting">
+                  <div class="wr-waiting-none">
+                     <p>Il n'y as pas de demande disponibles actuellement.</p>
+                  </div>
+                  <form id="f-wr-warehouse-requests-waiting" name="f-wr-warehouse-requests-waiting" class="wr-form" method="post" action="" autocomplete="off" >
+                     <input type="hidden" name="type" value="scan"/>
+                     <input type="hidden" name="reqtype" value="warehouse-requests-waiting"/>
+                     <input type="hidden" name="action" id="action" value="wait"/>
+                     <fieldset>
+                        <legend>Ajouter une demande</legend>
+                        <label for="id">Code à barres&nbsp;: </label>
+                        <input name="id" id="id" size="14" class="focus"/>
+                        <input type="submit" value="Valider" />
+                     </fieldset>
+                  </form>
+                  <form id="f-wr-waiting" name="f-wr-waiting" class="wr-form" method="post" action="">
+                     <input type="hidden" name="type" value="manual"/>
+                     <input type="hidden" name="reqtype" value="waiting"/>
+                  <div class="wr-requests-waiting_table_controls">
+	                  <a href="#" class="SelectAll"><i class="fa fa-check"></i> Tout sélectionner</a> | <a href="#" class="ClearAll"><i class="fa fa-remove"></i> Tout désélectionner</a>
+                  </div>
+                     <table id="warehouse-requests-waiting-table">
+                        <thead>
+                           <tr>
+                              <th class="wr-id">N°</th>
+                              <th class="wr-title">Notice</th>
+                              <th class="wr-request">Informations complémentaires</th>
+                              <th class="wr-holdingbranch">Site</th>
+                              <th class="wr-itemtype">Type de document</th>
+                              <th class="wr-callnumber">Cote</th>
+                              <th class="wr-barcode">Code à barres</th>
+                              <th class="wr-patron">Adhérent</th>
+                              <th class="wr-date">Dates</th>
+                              <th class="wr-actions">Actions</th>
+                           </tr>
+                        </thead>
+                        <tbody>
+                           [% FOREACH wr IN warehouse_requests_waiting %]
+                           <tr class="wr-row wr-waiting">
+                              <td class="wr-id">
+                                 [% wr.id %] <input type="checkbox" name="id" value="[% wr.id %]">
+                              </td>
+                              <td class="wr-title">
+                                 <p>
+                                    <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% wr.biblionumber %]">
+                                    <strong>[% wr.biblio.title | html %]</strong>
+                                    [% FOREACH s IN itemsloo.subtitle %] [% s %][% END %]
+                                    </a>
+                                 </p>
+                                 <p>
+                                 <div class="wr-biblionumber content_hidden">[% wr.biblionumber %]</div>
+                                 <div class="wr-author">[% wr.biblio.author %]</div>
+                                 <div class="wr-pubdata">
+                                    [% wr.biblio.biblioitem.publishercode %] [% IF wr.biblio.biblioitem.publicationyear %] [% wr.biblio.biblioitem.publicationyear %] [% ELSIF wr.biblio.copyrightdate %] [% wr.biblio.copyrightdate %] [% END %] [% IF wr.biblio.biblioitem.pages %] : [% wr.biblio.biblioitem.pages %] [% END %] [%  r.biblio.biblioitem.size %] [% IF wr.biblio.biblioitem.isbn %] ISBN&nbsp;: [% wr.biblio.biblioitem.isbn %] [% END %] 
+                                 </div>
+                                 </p>
+                              </td>
+                              <td class="wr-request">
+                                 [% IF wr.volume %] 
+                                 <p><strong>Volume(s)&nbsp;:</strong> [% wr.volume %] </p>
+                                 [% END %]
+                                 [% IF wr.issue %] 
+                                 <p><strong>Numéro(s)&nbsp;:</strong> [% wr.issue %] </p>
+                                 [% END %]
+                                 [% IF wr.date %] 
+                                 <p><strong>Date&nbsp;:</strong> [% wr.date %] </p>
+                                 [% END %]
+                                 [% IF wr.patron_notes %] 
+                                 <p><strong>Autre information&nbsp;:</strong> [% wr.patron_notes %] </p>
+                                 [% END %]
+                              </td>
+                              <td class="wr-holdingbranch">[% Branches.GetName ( wr.item.holdingbranch ) | html %]</td>
+                              <td class="wr-itemtype">[% ItemTypes.GetDescription( wr.item.effective_itemtype ) %]</td>
+                              <td class="wr-callnumber">
+                                 [% IF wr.item.location %]
+                                   <em>[% AuthorisedValues.GetDescriptionByKohaField( kohafield => 'items.location', authorised_value =>  wr.item.location ) | html %]</em>
+                                 [% END %]
+                                 [% wr.item.itemcallnumber %]
+                              </td>
+                              <td class="wr-barcode">[% wr.item.barcode %]</td>
+                              <td class="wr-patron">
+                                 <p>
+                                    <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% wr.borrower.borrowernumber %]">
+                                    [% wr.borrower.surname %][% IF wr.borrower.firstname %], [% wr.borrower.firstname %][% END %] 
+                                    </a>
+                                 </p>
+                                 [% IF wr.patron_name %]<p>[% wr.patron_name %]</p>[% END %]
+                                 [% IF wr.borrower.phone %]<p>[% wr.borrower.phone %]</p>[% END %]
+                              </td>
+                              <td class="wr-date">
+                                 <div>Création : [% wr.created_on | $KohaDates with_hours => 1 %]</div>
+                                 <div>Mise à jour : [% wr.updated_on | $KohaDates with_hours => 1 %]</div>
+                                 [% IF date.format( date.now, '%Y%m%d' ) > date.format( wr.deadline, '%Y%m%d' ) %]
+                                    <div class="toolate">
+                                 [% ELSE %]
+                                    <div>
+                                 [% END %]
+                                 A chercher avant le : [% wr.deadline | $KohaDates %]</div>
+                              </td>
+                              <td class="wr-actions">
+                                 <a class="wr-print-request btn btn-xs" href="#" id="[% wr.id %]">
+                                    <i class="fa fa-print"></i> Imprimer
+                                 </a>
+                              </td>
+                           </tr>
+                           [% END %]
+                        </tbody>
+                     </table>
+                     <fieldset>
+                        <div id="select-status-wr-waiting">
+                           <div id="status-wr-waiting">
+                              <label for="action">Marquer les éléments sélectionnés comme: </label>
+                              <select name="action" id="action">
+                                 <option value=""> -- Choisir un état --</option>
+                                 <option value="complete">Terminé</option>
+                                 <option value="cancel">Annulé</option>
+                              </select>
+                              <label for="reason-wr-waiting">avec le message:</label>
+                              <select id="reason-wr-waiting" name="reason-wr-waiting">
+                                 <option value=""> -- Choisir -- </option>
+                                 [% FOREACH reasonsloo IN reasonsloop %]
+                                 <option value="[% reasonsloo.lib %]">[% reasonsloo.lib %]</option>
+                                 [% END %] 
+                                 <option value="other">Autres...</option>
+                              </select>
+                              <span id="other_reason-wr-waiting">
+                              <input id="select-other_reason-wr-waiting" name="other_reason-wr-waiting" placeholder="merci d'indiquer la raison ici..." type="text" size="31" />
+                              <a href="#back-wr-waiting">Annuler</a>
+                              </span>
+                           </div>
+                        </div>
+                     </fieldset>
+                     <fieldset class="action">
+                        <input type="submit" value="Valider" />
+                     </fieldset>
+                  </form>
+               </div>
+               <div id="warehouse-requests-completed">
+                  <div class="wr-completed-none">
+                     <p>Il n'y as pas de demande terminées actuellement.</p>
+                  </div>
+                  <form id="f-wr-warehouse-requests-completed" name="f-wr-warehouse-requests-completed" class="wr-form" method="post" action="" autocomplete="off" >
+                     <input type="hidden" name="type" value="scan"/>
+                     <input type="hidden" name="reqtype" value="warehouse-requests-completed"/>
+                     <input type="hidden" name="action" id="action" value="complete"/>
+                     <fieldset>
+                        <legend>Ajouter une demande</legend>
+                        <label for="id">Code à barres&nbsp;: </label>
+                        <input name="id" id="id" size="14" class="focus"/>
+                        <input value="Valider" type="submit" />
+                     </fieldset>
+                  </form>
+                  <a id="load-completed-button" href="#" class="btn btn-default"><i class="fa fa-file-text"></i> Afficher les demandes terminées</a>
+               </div>
+               <div id="warehouse-requests-canceled">
+                  <div class="wr-canceled-none">
+                     <p>Il n'y as pas de demande annulée actuellement.</p>
+                  </div>
+                  <a id="load-canceled-button" href="#" class="btn btn-default"><i class="fa fa-file-text"></i> Afficher les demandes annulées</a>
+               </div>
+         </div>
+      </div>
+   </div>
+   
+   
+[% MACRO jsinclude BLOCK %]
+    [% INCLUDE 'datatables.inc' %]
+    <script>
+	      $(document).ready(function() {
+	         $("#warehouse-requests-pending-table,#warehouse-requests-processing-table,#warehouse-requests-waiting-table").dataTable($.extend(true, {}, dataTablesDefaults, {
+                "aoColumnDefs": [
+                    { "aTargets": [0, -1], "bSortable": false, "bSearchable": false },
+                ],
+            }));
+      
          $(document).ready(function() {
             var checkboxes = document.getElementsByTagName('input');
             
@@ -75,25 +543,26 @@
             
             [% IF warehouse_requests_pending.count %]
                $(".wr-pending-none").hide();
-               $("#CheckAllwarehouse-requests-pending").click(function(e){
-                  $("#warehouse-requests-pending-table").checkCheckboxes();
-                  e.preventDefault();
+                $(".wr-requests-pending_table_controls .SelectAll").click(function(e){
+	              e.preventDefault();
+                  $("#warehouse-requests-pending-table input[type='checkbox']").prop('checked', true);
                });
-               $("#UncheckAllwarehouse-requests-pending").click(function(e){
-                  $("#warehouse-requests-pending-table").unCheckCheckboxes();
-                  e.preventDefault();
-               });   
+               $(".wr-requests-pending_table_controls .ClearAll").click(function(e){
+	              e.preventDefault();
+                  $("#warehouse-requests-pending-table input[type='checkbox']").prop('checked', false);
+               });
+  
             [% END %]
             
             [% IF warehouse_requests_processing.count %]
                $(".wr-processing-none").hide();
-               $("#CheckAllwarehouse-requests-processing").click(function(e){
-                  $("#warehouse-requests-processing-table").checkCheckboxes();
-                  e.preventDefault();
+               $(".wr-requests-processing_table_controls .SelectAll").click(function(e){
+	              e.preventDefault();
+                  $("#warehouse-requests-processing-table input[type='checkbox']").prop('checked', true);
                });
-               $("#UncheckAllwarehouse-requests-processing").click(function(e){
-                  $("#warehouse-requests-processing-table").unCheckCheckboxes();
-                  e.preventDefault();
+               $(".wr-requests-processing_table_controls .ClearAll").click(function(e){
+	              e.preventDefault();
+                  $("#warehouse-requests-processing-table input[type='checkbox']").prop('checked', false);
                });
                $("#other_reason-wr-processing").hide();
                $("#reason-wr-processing").change(function(){
@@ -106,13 +575,13 @@
             
             [% IF warehouse_requests_waiting.count %]
                $(".wr-waiting-none").hide();
-               $("#CheckAllwarehouse-requests-waiting").click(function(e){
-                  $("#warehouse-requests-waiting-table").checkCheckboxes();
-                  e.preventDefault();
+                $(".wr-requests-waiting_table_controls .SelectAll").click(function(e){
+	              e.preventDefault();
+                  $("#warehouse-requests-waiting-table input[type='checkbox']").prop('checked', true);
                });
-               $("#UncheckAllwarehouse-requests-waiting").click(function(e){
-                  $("#warehouse-requests-waiting-table").unCheckCheckboxes();
-                  e.preventDefault();
+               $(".wr-requests-waiting_table_controls .ClearAll").click(function(e){
+	              e.preventDefault();
+                  $("#warehouse-requests-waiting-table input[type='checkbox']").prop('checked', false);
                });
                $("#other_reason-wr-waiting").hide();
                $("#reason-wr-waiting").change(function(){
@@ -225,6 +694,8 @@
                /*this.submit();*/
             });
          }
+         
+
          
          function PrintSlip(link) {
             window.open(link);
@@ -455,487 +926,18 @@
                      return false;
                   });
                   $('#warehouse-requests-'+status+'-table').dataTable($.extend(true, {}, dataTablesDefaults, {
-                     "aoColumnDefs": [
-//                         { "bVisible": false, "aTargets": [ 3,5 ] },
-                        { "bSortable": true, "aTargets": ["_all"] },             
-                        { "sType": "wr-date", "aTargets" : [ "wr-date" ] },
-                        { "sType": "wr-title", "aTargets" : [ "wr-title" ] }
-                     ],
-                     "aaSorting": [[ 0, 'desc' ]],
-                     "sPaginationType": "four_button",
-                     "autoWidth": false
-                  }));
+                "aoColumnDefs": [
+                    { "aTargets": [0, -1], "bSortable": false, "bSearchable": false },
+                ],
+            }));
                   UpdateTabCounts();
                },
                dataType: 'json'
             });
          }
-      //]]>
+         });
    </script>
-   <div id="breadcrumbs">
-      <a href="/cgi-bin/koha/mainpage.pl">Accueil</a>
-      &rsaquo;
-      <a href="/cgi-bin/koha/circ/circulation-home.pl">Circulation</a>
-      &rsaquo;
-      Demandes magasin
-   </div>
-   <div id="doc3" class="yui-t2">
-   <div id="bd">
-      <div id="yui-main">
-         <div class="yui-b">
-            <h1>Demandes différees</h1>
-            <form id="wr-branchcode-form" method="get">
-		       <input type="hidden" name="class" value="Koha::Plugin::Fr::UnivRennes2::WRM" />
-			   <input type="hidden" name="method" value="tool" />
-               <select name="branchcode" id="branchcode">
-                  <option value="">Tous les sites</option>
-                  [% FOREACH b IN Branches.all %]
-                  [% IF b.branchcode == branchcode %]
-                  <option value="[% b.branchcode %]" selected="selected">[% b.branchname %]</option>
-                  [% ELSE %]
-                  <option value="[% b.branchcode %]">[% b.branchname %]</option>
-                  [% END %]
-                  [% END %]
-               </select>
-               <button type="submit" class="btn btn-xs" type="submit">
-               <i class="fa fa-refresh"></i> Mettre à jour</button>
-            </form> 
+[% END %]
+   
 
-            <div id="warehouse-request-tabs" class="toptabs">
-               <ul>
-                  <li>
-                     <a href="#warehouse-requests-pending">
-                     En attente (<span id="wr_pending_count">[% warehouse_requests_pending.count %]</span>)
-                     </a>
-                  </li>
-                  <li>
-                     <a href="#warehouse-requests-processing">
-                     En traitement (<span id="wr_processing_count">[% warehouse_requests_processing.count %]</span>)
-                     </a>
-                  </li>
-                  <li>
-                     <a href="#warehouse-requests-waiting">
-                     Disponibles (<span id="wr_waiting_count">[% warehouse_requests_waiting.count %]</span>)
-                     </a>
-                  </li>
-                  <li>
-                     <a href="#warehouse-requests-canceled">
-                     Annulées<span id="wr_canceled_count"></span>
-                     </a>
-                  </li>
-                  <li>
-                     <a href="#warehouse-requests-completed">
-                     Terminées<span id="wr_completed_count"></span>
-                     </a>
-                  </li>
-               </ul>
-               <div id="warehouse-requests-pending">
-                  <div class="wr-pending-none">
-                     <p>Il n'y as pas de demande en attente actuellement.</p>
-                  </div>
-                  <p><a id="CheckAllwarehouse-requests-pending" href="#">Tout sélectionner</a> | <a id="UncheckAllwarehouse-requests-pending" href="#">Tout désélectionner</a></p>
-                  <form id="f-wr-pending" name="f-wr-pending" method="post" class="wr-form" action="">
-                     <input type="hidden" name="type" value="manual"/>
-                     <input type="hidden" name="reqtype" value="pending"/>
-                     <table id="warehouse-requests-pending-table">
-                        <thead>
-                           <tr>
-                              <th class="wr-id">N°</th>
-                              <th class="wr-title">Notice</th>
-                              <th class="wr-request">Informations complémentaires</th>
-                              <th class="wr-holdingbranch">Site</th>
-                              <th class="wr-itemtype">Type de document</th>
-                              <th class="wr-callnumber">Cote</th>
-                              <th class="wr-barcode">Code à barres</th>
-                              <th class="wr-patron">Adhérent</th>
-                              <th class="wr-date">Dates</th>
-                           </tr>
-                        </thead>
-                        <tbody>
-                           [% FOREACH wr IN warehouse_requests_pending %]
-                           <tr class="wr-row wr-pending">
-						    <!-- Id -->
-                              <td class="wr-id">
-                                 [% wr.id %] <input type="checkbox" name="id" value="[% wr.id %]"> 
-                              </td>
-                            <!-- title -->  
-                              <td class="wr-title">
-                                 <p>
-                                    <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% wr.biblionumber %]">
-                                    <strong>[% wr.biblio.title | html %]</strong>
-                                    [% FOREACH s IN itemsloo.subtitle %] [% s %][% END %]
-                                    </a>
-                                 </p>
-                                 <p>
-                                 <div class="wr-biblionumber content_hidden">[% wr.biblionumber %]</div>
-                                 <div class="wr-author">[% wr.biblio.author %]</div>
-                                 <div class="wr-pubdata">
-                                    [% wr.biblio.biblioitem.publishercode %] [% IF wr.biblio.biblioitem.publicationyear %] [% wr.biblio.biblioitem.publicationyear %] [% ELSIF wr.biblio.copyrightdate %] [% wr.biblio.copyrightdate %] [% END %] [% IF wr.biblio.biblioitem.pages %] : [% wr.biblio.biblioitem.pages %] [% END %] [%  r.biblio.biblioitem.size %] [% IF wr.biblio.biblioitem.isbn %] ISBN&nbsp;: [% wr.biblio.biblioitem.isbn %] [% END %] 
-                                 </div>
-                                 </p>
-                              </td>
-                            <!-- request -->   
-                              <td class="wr-request">
-                                 [% IF wr.volume %] 
-                                 <p><strong>Volume(s)&nbsp;:</strong> [% wr.volume %] </p>
-                                 [% END %]
-                                 [% IF wr.issue %] 
-                                 <p><strong>Numéro(s)&nbsp;:</strong> [% wr.issue %] </p>
-                                 [% END %]
-                                 [% IF wr.date %] 
-                                 <p><strong>Date&nbsp;:</strong> [% wr.date %] </p>
-                                 [% END %]
-                                 [% IF wr.patron_notes %] 
-                                 <p><strong>Autre information&nbsp;:</strong> [% wr.patron_notes %] </p>
-                                 [% END %]
-                              </td>
-                            <!-- holdingbranch -->  
-                              <td class="wr-holdingbranch">
-                                 [% Branches.GetName ( wr.item.holdingbranch ) | html %]
-                              </td>
-                            <!-- itemtype --> 
-                              <td class="wr-itemtype">[% ItemTypes.GetDescription( wr.item.effective_itemtype ) %]</td>
-                            <!-- callnumber -->   
-                              <td class="wr-callnumber">
-                                 [% IF wr.item.location %]
-                                 <em>[% AuthorisedValues.GetByCode( 'LOC', wr.item.location ) %]</em>
-                                 [% END %]
-                                 [% wr.item.itemcallnumber %]
-                              </td>
-                            <!-- barcode -->   
-                              <td class="wr-barcode">[% wr.item.barcode %]</td>
-                            <!-- patron -->    
-                              <td class="wr-patron">
-                                 <p>
-                                    <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% wr.borrower.borrowernumber %]">
-                                    [% wr.borrower.surname %][% IF wr.borrower.firstname %], [% wr.borrower.firstname %][% END %]
-                                    </a>
-                                 </p>
-                                 [% IF wr.patron_name %]<p>[% wr.patron_name %]</p>[% END %]
-                                 [% IF wr.borrower.phone %]<p>[% wr.borrower.phone %]</p>[% END %]
-                              </td>
-                            <!-- date --> 
-                              <td class="wr-date">
-                                 <div>Création : [% wr.created_on | $KohaDates with_hours => 1 %]</div>
-                                 <div>Mise à jour : [% wr.updated_on | $KohaDates with_hours => 1 %]</div>
-                              </td>
-                              <!-- 
-                                 <td class="wr-actions">
-                                 <div class="dropdown">
-                                 <a class="btn btn-mini dropdown-toggle" id="wr-actions" role="button" data-toggle="dropdown" href="#">
-                                 Actions <b class="caret"></b>
-                                 </a>
-                                 <ul class="dropdown-menu pull-right" role="menu" aria-labelledby="wr-actions">
-                                 <li>
-                                 <a class="wr-process-request" href="#" onclick="Process( [% wr.id %], $(this) ); return false; ">
-                                 <i class="fa fa-cog"></i>
-                                 Process request
-                                 </a>
-                                 </li>
-                                 </ul>
-                                 </div>
-                                 </td>
-                                 --> 
-                           </tr>
-                           [% END %]
-                        </tbody>
-                     </table>
-                     <fieldset>
-                        <div id="select-status-wr-pending">
-                           <div id="status-wr-pending">
-                              <label for="action">Marquer les éléments sélectionnés comme: </label>
-                              <select name="action" id="action">
-                                 <option value=""> -- Choisir un état --</option>
-                                 <option value="process">En traitement</option>
-                              </select>
-                           </div>
-                        </div>
-                     </fieldset>
-                     <fieldset class="action">
-                        <input value="Valider" type="submit" />
-                     </fieldset>
-                  </form>
-               </div>
-               <div id="warehouse-requests-processing">
-                  <div class="wr-processing-none">
-                     <p>Il n'y as pas de demande en traitement actuellement.</p>
-                  </div>
-                  <p><a id="CheckAllwarehouse-requests-processing" href="#">Tout sélectionner</a> | <a id="UncheckAllwarehouse-requests-processing" href="#">Tout désélectionner</a></p>
-                  <form id="f-wr-processing" name="f-wr-processing" class="wr-form" method="post" action="">
-                     <input type="hidden" name="type" value="manual"/>
-                     <input type="hidden" name="reqtype" value="processing"/>
-                     <table id="warehouse-requests-processing-table">
-                        <thead>
-                           <tr>
-                              <th class="wr-id">N°</th>
-                              <th class="wr-title">Notice</th>
-                              <th class="wr-request">Informations complémentaires</th>
-                              <th class="wr-holdingbranch">Site</th>
-                              <th class="wr-itemtype">Type de document</th>
-                              <th class="wr-callnumber">Cote</th>
-                              <th class="wr-barcode">Code à barres</th>
-                              <th class="wr-patron">Adhérent</th>
-                              <th class="wr-date">Dates</th>
-                              <th class="wr-actions">Actions</th>
-                           </tr>
-                        </thead>
-                        <tbody>
-                           [% FOREACH wr IN warehouse_requests_processing %]
-                           <tr class="wr-row wr-processing">
-                              <td class="wr-id">
-                                 [% wr.id %] <input type="checkbox" name="id" value="[% wr.id %]">
-                              </td>
-                              <td class="wr-title">
-                                 <p>
-                                    <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% wr.biblionumber %]">
-                                    <strong>[% wr.biblio.title | html %]</strong>
-                                    [% FOREACH s IN itemsloo.subtitle %] [% s %][% END %]
-                                    </a>
-                                 </p>
-                                 <p>
-                                 <div class="wr-biblionumber content_hidden">[% wr.biblionumber %]</div>
-                                 <div class="wr-author">[% wr.biblio.author %]</div>
-                                 <div class="wr-pubdata">
-                                    [% wr.biblio.biblioitem.publishercode %] [% IF wr.biblio.biblioitem.publicationyear %] [% wr.biblio.biblioitem.publicationyear %] [% ELSIF wr.biblio.copyrightdate %] [% wr.biblio.copyrightdate %] [% END %] [% IF wr.biblio.biblioitem.pages %] : [% wr.biblio.biblioitem.pages %] [% END %] [%  r.biblio.biblioitem.size %] [% IF wr.biblio.biblioitem.isbn %] ISBN&nbsp;: [% wr.biblio.biblioitem.isbn %] [% END %] 
-                                 </div>
-                                 </p>
-                              </td>
-                              <td class="wr-request">
-                                 [% IF wr.volume %] 
-                                 <p><strong>Volume(s)&nbsp;:</strong> [% wr.volume %] </p>
-                                 [% END %]
-                                 [% IF wr.issue %] 
-                                 <p><strong>Numéro(s)&nbsp;:</strong> [% wr.issue %] </p>
-                                 [% END %]
-                                 [% IF wr.date %] 
-                                 <p><strong>Date&nbsp;:</strong> [% wr.date %] </p>
-                                 [% END %]
-                                 [% IF wr.patron_notes %] 
-                                 <p><strong>Autre information&nbsp;:</strong> [% wr.patron_notes %] </p>
-                                 [% END %]
-                              </td>
-                             <td class="wr-holdingbranch">
-                                 [% Branches.GetName ( wr.item.holdingbranch ) | html %]
-                              </td>
-                              <td class="wr-itemtype">[% ItemTypes.GetDescription( wr.item.effective_itemtype ) %]</td>
-                              <td class="wr-callnumber">
-                                 [% IF wr.item.location %]
-                                 <em>[% AuthorisedValues.GetByCode( 'LOC', wr.item.location ) %]</em>
-                                 [% END %]
-                                 [% wr.item.itemcallnumber %]
-                              </td>
-                              <td class="wr-barcode">[% wr.item.barcode %]</td>
-                              <td class="wr-patron">
-                                 <p>
-                                    <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% wr.borrower.borrowernumber %]">
-                                    [% wr.borrower.surname %][% IF wr.borrower.firstname %], [% wr.borrower.firstname %][% END %] 
-                                    </a>
-                                 </p>
-                                 [% IF wr.patron_name %]<p>[% wr.patron_name %]</p>[% END %]
-                                 [% IF wr.borrower.phone %]<p>[% wr.borrower.phone %]</p>[% END %]
-                              </td>
-                              <td class="wr-date">
-                                 <div>Création : [% wr.created_on | $KohaDates with_hours => 1 %]</div>
-                                 <div>Mise à jour : [% wr.updated_on | $KohaDates with_hours => 1 %]</div>
-                              </td>
-                              <td class="wr-actions">
-                                 <a class="wr-print-request btn btn-xs" href="#" id="[% wr.id %]">
-                                    <i class="fa fa-print"></i> Imprimer
-                                 </a>
-                              </td>
-                           </tr>
-                           [% END %]
-                        </tbody>
-                     </table>
-                     <fieldset>
-                        <div id="select-status-wr-processing">
-                           <div id="status-wr-processing">
-                              <label for="action">Marquer les éléments sélectionnés comme: </label>
-                              <select name="action" id="action">
-                                 <option value=""> -- Choisir un état --</option>
-                                 <option value="wait">Disponible</option>
-                                 <option value="cancel">Annulé</option>
-                              </select>
-                              <label for="reason-wr-processing">avec le message:</label>
-                              <select id="reason-wr-processing" name="reason-wr-processing">
-                                 <option value=""> -- Choisir -- </option>
-                                 [% FOREACH reasonsloo IN reasonsloop %]
-                                 <option value="[% reasonsloo.lib %]">[% reasonsloo.lib %]</option>
-                                 [% END %] 
-                                 <option value="other">Autres...</option>
-                              </select>
-                              <span id="other_reason-wr-processing">
-                              <input name="other_reason-wr-processing" placeholder="merci d'indiquer la raison ici..." id="select-other_reason-wr-processing" size="31" type="text" />
-                              <a href="#back-wr-processing">Annuler</a>
-                              </span>
-                           </div>
-                        </div>
-                     </fieldset>
-                     <fieldset class="action">
-                        <input type="submit" value="Valider" />
-                     </fieldset>
-                  </form>
-               </div>
-               <div id="warehouse-requests-waiting">
-                  <div class="wr-waiting-none">
-                     <p>Il n'y as pas de demande disponibles actuellement.</p>
-                  </div>
-                  <form id="f-wr-warehouse-requests-waiting" name="f-wr-warehouse-requests-waiting" class="wr-form" method="post" action="" autocomplete="off" >
-                     <input type="hidden" name="type" value="scan"/>
-                     <input type="hidden" name="reqtype" value="warehouse-requests-waiting"/>
-                     <input type="hidden" name="action" id="action" value="wait"/>
-                     <fieldset>
-                        <legend>Ajouter une demande</legend>
-                        <label for="id">Code à barres&nbsp;: </label>
-                        <input name="id" id="id" size="14" class="focus"/>
-                        <input type="submit" value="Valider" />
-                     </fieldset>
-                  </form>
-                  <form id="f-wr-waiting" name="f-wr-waiting" class="wr-form" method="post" action="">
-                     <input type="hidden" name="type" value="manual"/>
-                     <input type="hidden" name="reqtype" value="waiting"/>
-                     <p><a id="CheckAllwarehouse-requests-waiting" href="#">Tout sélectionner</a> | <a id="UncheckAllwarehouse-requests-waiting" href="#">Tout désélectionner</a></p>
-                     <table id="warehouse-requests-waiting-table">
-                        <thead>
-                           <tr>
-                              <th class="wr-id">N°</th>
-                              <th class="wr-title">Notice</th>
-                              <th class="wr-request">Informations complémentaires</th>
-                              <th class="wr-holdingbranch">Site</th>
-                              <th class="wr-itemtype">Type de document</th>
-                              <th class="wr-callnumber">Cote</th>
-                              <th class="wr-barcode">Code à barres</th>
-                              <th class="wr-patron">Adhérent</th>
-                              <th class="wr-date">Dates</th>
-                              <th class="wr-actions">Actions</th>
-                           </tr>
-                        </thead>
-                        <tbody>
-                           [% FOREACH wr IN warehouse_requests_waiting %]
-                           <tr class="wr-row wr-waiting">
-                              <td class="wr-id">
-                                 [% wr.id %] <input type="checkbox" name="id" value="[% wr.id %]">
-                              </td>
-                              <td class="wr-title">
-                                 <p>
-                                    <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% wr.biblionumber %]">
-                                    <strong>[% wr.biblio.title | html %]</strong>
-                                    [% FOREACH s IN itemsloo.subtitle %] [% s %][% END %]
-                                    </a>
-                                 </p>
-                                 <p>
-                                 <div class="wr-biblionumber content_hidden">[% wr.biblionumber %]</div>
-                                 <div class="wr-author">[% wr.biblio.author %]</div>
-                                 <div class="wr-pubdata">
-                                    [% wr.biblio.biblioitem.publishercode %] [% IF wr.biblio.biblioitem.publicationyear %] [% wr.biblio.biblioitem.publicationyear %] [% ELSIF wr.biblio.copyrightdate %] [% wr.biblio.copyrightdate %] [% END %] [% IF wr.biblio.biblioitem.pages %] : [% wr.biblio.biblioitem.pages %] [% END %] [%  r.biblio.biblioitem.size %] [% IF wr.biblio.biblioitem.isbn %] ISBN&nbsp;: [% wr.biblio.biblioitem.isbn %] [% END %] 
-                                 </div>
-                                 </p>
-                              </td>
-                              <td class="wr-request">
-                                 [% IF wr.volume %] 
-                                 <p><strong>Volume(s)&nbsp;:</strong> [% wr.volume %] </p>
-                                 [% END %]
-                                 [% IF wr.issue %] 
-                                 <p><strong>Numéro(s)&nbsp;:</strong> [% wr.issue %] </p>
-                                 [% END %]
-                                 [% IF wr.date %] 
-                                 <p><strong>Date&nbsp;:</strong> [% wr.date %] </p>
-                                 [% END %]
-                                 [% IF wr.patron_notes %] 
-                                 <p><strong>Autre information&nbsp;:</strong> [% wr.patron_notes %] </p>
-                                 [% END %]
-                              </td>
-                              <td class="wr-holdingbranch">[% Branches.GetName ( wr.item.holdingbranch ) | html %]</td>
-                              <td class="wr-itemtype">[% ItemTypes.GetDescription( wr.item.effective_itemtype ) %]</td>
-                              <td class="wr-callnumber">
-                                 [% IF wr.item.location %]
-                                 <em>[% AuthorisedValues.GetByCode( 'LOC', wr.item.location ) %]</em>
-                                 [% END %]
-                                 [% wr.item.itemcallnumber %]
-                              </td>
-                              <td class="wr-barcode">[% wr.item.barcode %]</td>
-                              <td class="wr-patron">
-                                 <p>
-                                    <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% wr.borrower.borrowernumber %]">
-                                    [% wr.borrower.surname %][% IF wr.borrower.firstname %], [% wr.borrower.firstname %][% END %] 
-                                    </a>
-                                 </p>
-                                 [% IF wr.patron_name %]<p>[% wr.patron_name %]</p>[% END %]
-                                 [% IF wr.borrower.phone %]<p>[% wr.borrower.phone %]</p>[% END %]
-                              </td>
-                              <td class="wr-date">
-                                 <div>Création : [% wr.created_on | $KohaDates with_hours => 1 %]</div>
-                                 <div>Mise à jour : [% wr.updated_on | $KohaDates with_hours => 1 %]</div>
-                                 [% IF date.format( date.now, '%Y%m%d' ) > date.format( wr.deadline, '%Y%m%d' ) %]
-                                    <div class="toolate">
-                                 [% ELSE %]
-                                    <div>
-                                 [% END %]
-                                 A chercher avant le : [% wr.deadline | $KohaDates %]</div>
-                              </td>
-                              <td class="wr-actions">
-                                 <a class="wr-print-request btn btn-xs" href="#" id="[% wr.id %]">
-                                    <i class="fa fa-print"></i> Imprimer
-                                 </a>
-                              </td>
-                           </tr>
-                           [% END %]
-                        </tbody>
-                     </table>
-                     <fieldset>
-                        <div id="select-status-wr-waiting">
-                           <div id="status-wr-waiting">
-                              <label for="action">Marquer les éléments sélectionnés comme: </label>
-                              <select name="action" id="action">
-                                 <option value=""> -- Choisir un état --</option>
-                                 <option value="complete">Terminé</option>
-                                 <option value="cancel">Annulé</option>
-                              </select>
-                              <label for="reason-wr-waiting">avec le message:</label>
-                              <select id="reason-wr-waiting" name="reason-wr-waiting">
-                                 <option value=""> -- Choisir -- </option>
-                                 [% FOREACH reasonsloo IN reasonsloop %]
-                                 <option value="[% reasonsloo.lib %]">[% reasonsloo.lib %]</option>
-                                 [% END %] 
-                                 <option value="other">Autres...</option>
-                              </select>
-                              <span id="other_reason-wr-waiting">
-                              <input id="select-other_reason-wr-waiting" name="other_reason-wr-waiting" placeholder="merci d'indiquer la raison ici..." type="text" size="31" />
-                              <a href="#back-wr-waiting">Annuler</a>
-                              </span>
-                           </div>
-                        </div>
-                     </fieldset>
-                     <fieldset class="action">
-                        <input type="submit" value="Valider" />
-                     </fieldset>
-                  </form>
-               </div>
-               <div id="warehouse-requests-completed">
-                  <div class="wr-completed-none">
-                     <p>Il n'y as pas de demande terminées actuellement.</p>
-                  </div>
-                  <form id="f-wr-warehouse-requests-completed" name="f-wr-warehouse-requests-completed" class="wr-form" method="post" action="" autocomplete="off" >
-                     <input type="hidden" name="type" value="scan"/>
-                     <input type="hidden" name="reqtype" value="warehouse-requests-completed"/>
-                     <input type="hidden" name="action" id="action" value="complete"/>
-                     <fieldset>
-                        <legend>Ajouter une demande</legend>
-                        <label for="id">Code à barres&nbsp;: </label>
-                        <input name="id" id="id" size="14" class="focus"/>
-                        <input value="Valider" type="submit" />
-                     </fieldset>
-                  </form>
-                  <a id="load-completed-button" href="#" class="btn btn-default"><i class="fa fa-file-text"></i> Afficher les demandes terminées</a>
-               </div>
-               <div id="warehouse-requests-canceled">
-                  <div class="wr-canceled-none">
-                     <p>Il n'y as pas de demande annulée actuellement.</p>
-                  </div>
-                  <a id="load-canceled-button" href="#" class="btn btn-default"><i class="fa fa-file-text"></i> Afficher les demandes annulées</a>
-               </div>
-            </div>
-         </div>
-      </div>
-   </div>
-   [% INCLUDE 'intranet-bottom.inc' %]
+[% INCLUDE 'intranet-bottom.inc' %]

@@ -478,7 +478,7 @@ sub intranet_js {
             }
             // Catalog detail link
             let searchParams = new URLSearchParams(window.location.search);
-            $('#catalog_detail #toolbar, #catalog_moredetail #toolbar').append('<div class="btn-group"><a id="placehold" class="btn btn-default btn-sm" href="/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3AFr%3A%3AUnivRennes2%3A%3AWRM&method=tool&op=creation&biblionumber='+searchParams.get('biblionumber')+'"><i class="fa fa-file-text-o"></i> Demande magasin</a></div>');
+            $('#catalog_detail #toolbar, #catalog_moredetail #toolbar').append('<div class="btn-group"><a id="placehold" class="btn btn-default " href="/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3AFr%3A%3AUnivRennes2%3A%3AWRM&method=tool&op=creation&biblionumber='+searchParams.get('biblionumber')+'"><i class="fa fa-file-text-o"></i> Demande magasin</a></div>');
             if ( $('body.circ div#menu, body.catalog div#menu').length > 0 && searchParams.get('biblionumber') != undefined) {
                 $('body.circ div#menu ul:first-child, body.catalog div#menu ul:first-child').append('<li><a id="wr-menu-link" href="/cgi-bin/koha/plugins/run.pl?class=Koha%3A%3APlugin%3A%3AFr%3A%3AUnivRennes2%3A%3AWRM&method=tool&op=creation&biblionumber='+searchParams.get('biblionumber')+'">Demandes magasin (?)</a></li>');
                 $.get({
