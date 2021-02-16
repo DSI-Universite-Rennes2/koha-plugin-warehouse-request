@@ -82,7 +82,7 @@
                     </div>
                     <div class="rows">
                     <!-- Always pass these two parameters so the plugin system knows what to execute! -->
-                        <h3>Configuration RabbitMQ</h3>
+                        <h3>Configuration RabbitMQ (optionnel)</h3>
                         <ol>
                             <li>
                                 <label for="rmq_server"><span class="label">Serveur : </span></label>
