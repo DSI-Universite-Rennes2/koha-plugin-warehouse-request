@@ -39,8 +39,10 @@ Dans le module Outils de koha, un nouveau menu "Outils de plugin" apparaitra.
 
 - Koha 18.11 minimum (jusqu'à la version 1.1), Koha 20.05 pour la branche master
 - Modules Perl:
-  - YAML
-  - YAML
+  - Compress::Bzip2
+  - HTML::Barcode::Code128
+  - PDF::WebKit
+  - Net::AMQP::RabbitMQ (optionnel)
 
 ### Étapes d'installation
 
