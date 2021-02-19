@@ -101,7 +101,7 @@
             "parameters": [{
                 "name": "biblionumber",
                 "in": "query",
-                "description": "Requesteditem biblionumber",
+                "description": "Requested item biblionumber",
                 "required": false,
                 "type": "integer"
             }, {
