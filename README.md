@@ -68,6 +68,18 @@ Une fois les étapes précédentes réalisées, le plugin est fonctionnel. Pour 
 
 - ```Configuration RabbitMQ``` : Optionnel, permet d'utiliser RabbitMQ pour générer des files pour l'impression des tickets vers un serveur d'impression du type Papercut (voir cronjob ```send-slips.pl```);
 
+## Notifications et ticket
+
+Au moment de l'installation, le plugin va créer 5 lettres de notifications (Outils > Notifciations et tickets):
+
+- ```WR_CANCELED``` : Notification envoyé lorsqu'une demande est annulée (possibilité de paramétrer les raisons de l'annulation au niveau de la liste de valeurs autorisées ```WR_REASON```) ;
+- ```WR_COMPLETED``` : Notification envoyée lorsque la demande est terminée ;
+- ```WR_PENDING``` :  Notification envoyée lorsque la demande est en attente de prise en charge ;
+- ```WR_PROCESSING``` :  Notification envoyée lorsque la demande est en cours de traitement ;
+- ```WR_WAITING``` : Types de document autorisés à être communiqué depuis les magasins ;
+
+et un ticket prévu pour l'impression : ```WR_SLIP```
+
 ## Cronjobs
 
 Tous les cronjobs disponibles sont les suivants :
