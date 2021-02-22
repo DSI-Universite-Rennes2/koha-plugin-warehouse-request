@@ -1,4 +1,4 @@
-package Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequest;
+package Koha::WarehouseRequest;
 
 # Copyright ByWater Solutions 2015
 #
@@ -29,14 +29,14 @@ use Koha::Patrons;
 use Koha::Biblios;
 use Koha::Items;
 use Koha::Libraries;
-use Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status;
+use Koha::WarehouseRequestStatus;
 use Koha::DateUtils qw(dt_from_string);
 
 use base qw(Koha::Object);
 
 =head1 NAME
 
-Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequest - Koha Warehouse Request Object class
+Koha::WarehouseRequest - Koha Warehouse Request Object class
 
 =head1 API
 
@@ -51,7 +51,7 @@ Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequest - Koha Warehouse Re
 sub open {
     my ($self) = @_;
 
-    $self->status(Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::Pending);
+    $self->status(Koha::WarehouseRequestStatus::Pending);
     $self->SUPER::store();
     $self->notify();
     return $self;
@@ -65,7 +65,7 @@ sub open {
 sub process {
     my ($self) = @_;
 
-    $self->status(Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::Processing);
+    $self->status(Koha::WarehouseRequestStatus::Processing);
     $self->store();
     return $self;
 }
@@ -78,7 +78,7 @@ sub wait {
     my ($self, $days_to_keep ) = @_;
     my $deadline = $self->calculate_deadline( $days_to_keep );
 
-    $self->status(Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::Waiting);
+    $self->status(Koha::WarehouseRequestStatus::Waiting);
     $self->deadline( $deadline );
     $self->store();
     $self->notify();
@@ -92,7 +92,7 @@ sub wait {
 sub complete {
     my ($self) = @_;
 
-    $self->status(Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::Completed);
+    $self->status(Koha::WarehouseRequestStatus::Completed);
     $self->store();
     return $self;
 }
@@ -104,7 +104,7 @@ sub complete {
 sub cancel {
     my ( $self, $notes ) = @_;
 
-    $self->status(Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::Canceled);
+    $self->status(Koha::WarehouseRequestStatus::Canceled);
     $self->notes($notes) if $notes;
     $self->store();
     $self->notify();
@@ -131,7 +131,7 @@ sub calculate_deadline {
     my $calendar = Koha::Calendar->new(branchcode => $self->branchcode);
     my $deadline = DateTime->now( time_zone => C4::Context->tz() );
     while ( $days_to_keep > 0 ) {
-        $deadline = $calendar->next_open_day($deadline);
+        $deadline = $calendar->next_open_days( $deadline, 1 );
         $days_to_keep--;
     }
     my $dtf = Koha::Database->new->schema->storage->datetime_parser;
@@ -181,7 +181,7 @@ Returns the label version of the status
 sub status_label {
     my ($self) = @_;
     
-    return Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::GetStatusLabel($self->status);
+    return Koha::WarehouseRequestStatus::GetStatusLabel($self->status);
 }
 
 =head3 biblio

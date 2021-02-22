@@ -2,9 +2,15 @@ package Koha::Plugin::Fr::UnivRennes2::WRM;
 
 use utf8;
 use Modern::Perl;
+use Mojo::JSON qw(decode_json encode_json);
+
 use base qw(Koha::Plugins::Base);
 
-use Mojo::JSON qw(decode_json encode_json);
+use Cwd qw(abs_path);
+use Encode qw(decode);
+use File::Slurp qw(read_file);
+use Module::Metadata;
+
 use C4::Auth;
 use Date::Calc qw(Date_to_Days);
 use C4::Utils::DataTables::Members;
@@ -13,6 +19,7 @@ use C4::Context;
 use C4::Koha; #GetItemTypes
 use C4::Letters;
 use C4::Members;
+use C4::Installer qw(TableExists);
 use Koha::AuthorisedValue;
 use Koha::AuthorisedValues;
 use Koha::AuthorisedValueCategory;
@@ -22,11 +29,31 @@ use Koha::Database;
 use Koha::DateUtils;
 use Koha::Items;
 use Koha::Patrons;
-use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests;
-use Koha::Plugin::Fr::UnivRennes2::WRM::Object::Slip;
+use Koha::Schema;
+
 
 ## Here we set our plugin version
-our $VERSION = '0.95';
+
+
+BEGIN {
+    my $path = Module::Metadata->find_module_by_name(__PACKAGE__);
+    $path =~ s!\.pm$!/lib!;
+    unshift @INC, $path;
+
+    require Koha::WarehouseRequestSlip;
+    require Koha::WarehouseRequestStatus;
+    require Koha::WarehouseRequests;
+    require Koha::WarehouseRequest;
+    require Koha::Schema::Result::WarehouseRequest;
+
+    # register the additional schema classes
+    Koha::Schema->register_class(WarehouseRequest => 'Koha::Schema::Result::WarehouseRequest');
+    # ... and force a refresh of the database handle so that it includes
+    # the new classes
+    Koha::Database->schema({ new => 1 });
+}
+
+our $VERSION = '{VERSION}';
 
 ## Here is our metadata, some keys are required, some are optional
 our $metadata = {
@@ -78,9 +105,9 @@ sub tool {
         
         $template->param(
             branchcode                    => $branchcode,
-            warehouse_requests_pending    => scalar Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->pending($branchcode),
-            warehouse_requests_processing => scalar Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->processing($branchcode),
-            warehouse_requests_waiting    => scalar Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->waiting($branchcode),
+            warehouse_requests_pending    => scalar Koha::WarehouseRequests->pending($branchcode),
+            warehouse_requests_processing => scalar Koha::WarehouseRequests->processing($branchcode),
+            warehouse_requests_waiting    => scalar Koha::WarehouseRequests->waiting($branchcode),
             reasonsloop     => $reasonsloop,
         );
         
@@ -155,7 +182,7 @@ sub creation {
         my $patron_name  = $query->param('patron_name')  || undef;
         my $patron_notes = $query->param('patron_notes') || undef;
     
-        my $wr =  Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequest->new({
+        my $wr =  Koha::WarehouseRequest->new({
             borrowernumber => $borrowernumber,
             biblionumber   => $biblio->biblionumber,
             branchcode     => $branchcode,
@@ -205,7 +232,7 @@ sub creation {
         items => \@items,
         patron => $patron,
         expiry => $expiry,
-        requests => scalar Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search({ biblionumber => $biblio->biblionumber, archived => 0 })
+        requests => scalar Koha::WarehouseRequests->search({ biblionumber => $biblio->biblionumber, archived => 0 })
     );
     
     $self->output_html( $template->output );
@@ -261,7 +288,7 @@ sub ticket {
     my $query = $self->{'cgi'};
     my $id = $query->param('id');
     
-    my $slip = Koha::Plugin::Fr::UnivRennes2::WRM::Object::Slip::getTicket($query, $id);
+    my $slip = Koha::WarehouseRequestSlip::getTicket($query, $id);
     
     print "Content-type: application/pdf\nCharset: utf-8\n\n";
     binmode(STDOUT);
@@ -278,6 +305,12 @@ sub get_days_since_archived {
     my ( $self, $args ) = @_;
     my $days_to_keep = $self->retrieve_data('days_since_archived') // 15;
     return $days_to_keep;
+}
+
+sub is_enabled {
+    my ( $self, $args ) = @_;
+    my $is_enabled = $self->retrieve_data('warehouse_opac_enabled') // 0;
+    return $is_enabled;
 }
 
 sub get_rmq_configuration {
@@ -627,17 +660,19 @@ sub configure {
     my $template = $self->get_template({ file => 'templates/configure.tt' });
     if ( $cgi->param('save') ) {
         my $myconf;
-        $myconf->{days_to_keep} = $cgi->param('days_to_keep');
-        $myconf->{days_since_archived} = $cgi->param('days_since_archived');
-        $myconf->{warehouse_branches} = join(",", $cgi->multi_param('warehouse_branches')); 
-        $myconf->{warehouse_locations} = join(",", $cgi->multi_param('warehouse_locations'));
-        $myconf->{warehouse_itemtypes} = join(",", $cgi->multi_param('warehouse_itemtypes'));
-        $myconf->{warehouse_notforloan} = join(",", $cgi->multi_param('warehouse_notforloan'));               
-        $myconf->{rmq_server} = $cgi->param('rmq_server');
-        $myconf->{rmq_port} = $cgi->param('rmq_port');
-        $myconf->{rmq_vhost} = $cgi->param('rmq_vhost');
-        $myconf->{rmq_exchange} = $cgi->param('rmq_exchange');
-        $myconf->{rmq_user} = $cgi->param('rmq_user');
+        $myconf->{days_to_keep}                 = $cgi->param('days_to_keep') || 0;
+        $myconf->{days_since_archived}          = $cgi->param('days_since_archived') || 0;
+        $myconf->{warehouse_branches}           = join(",", $cgi->multi_param('warehouse_branches')); 
+        $myconf->{warehouse_locations}          = join(",", $cgi->multi_param('warehouse_locations'));
+        $myconf->{warehouse_itemtypes}          = join(",", $cgi->multi_param('warehouse_itemtypes'));
+        $myconf->{warehouse_notforloan}         = join(",", $cgi->multi_param('warehouse_notforloan'));
+        $myconf->{warehouse_opac_enabled}   	= $cgi->param('warehouse_opac_enabled') || 0;
+        $myconf->{warehouse_message_disabled}   = $cgi->param('warehouse_message_disabled') || undef;
+        $myconf->{rmq_server}                   = $cgi->param('rmq_server');
+        $myconf->{rmq_port}                     = $cgi->param('rmq_port');
+        $myconf->{rmq_vhost}                    = $cgi->param('rmq_vhost');
+        $myconf->{rmq_exchange}                 = $cgi->param('rmq_exchange');
+        $myconf->{rmq_user}                     = $cgi->param('rmq_user');
         if ( $cgi->param('rmq_pwd') ) {
             if ( $cgi->param('rmq_pwd_conf') && $cgi->param('rmq_pwd') eq $cgi->param('rmq_pwd_conf') ) {
                 $myconf->{rmq_pwd} = $cgi->param('rmq_pwd');
@@ -687,21 +722,23 @@ sub configure {
 
 
     $template->param(
-        'days_to_keep' => $self->retrieve_data('days_to_keep'),
-        'days_since_archived' => $self->retrieve_data('days_since_archived'),
-        'warehouse_branches' => \@warehouse_branches,
-        'branches' => $branches,
-        'warehouse_locations' => \@warehouse_locations,
-        'locations' => \@locations,
-        'warehouse_itemtypes' => \@warehouse_itemtypes,
-        'itemtypes' => $itemtypes,
-        'warehouse_notforloan' => \@warehouse_notforloan,
-        'notforloan' => \@notforloan,
-        'rmq_server' => $self->retrieve_data('rmq_server'),
-        'rmq_port' => $self->retrieve_data('rmq_port'),
-        'rmq_vhost' => $self->retrieve_data('rmq_vhost'),
-        'rmq_exchange' => $self->retrieve_data('rmq_exchange'),
-        'rmq_user' => $self->retrieve_data('rmq_user')
+        'days_to_keep' 					=> $self->retrieve_data('days_to_keep'),
+        'days_since_archived' 			=> $self->retrieve_data('days_since_archived'),
+        'warehouse_branches' 			=> \@warehouse_branches,
+        'branches' 						=> $branches,
+        'warehouse_locations' 			=> \@warehouse_locations,
+        'locations' 					=> \@locations,
+        'warehouse_itemtypes' 			=> \@warehouse_itemtypes,
+        'itemtypes' 					=> $itemtypes,
+        'warehouse_notforloan' 			=> \@warehouse_notforloan,
+        'notforloan' 					=> \@notforloan,
+        'warehouse_opac_enabled' 		=> $self->retrieve_data('warehouse_opac_enabled'),
+        'warehouse_message_disabled' 	=> $self->retrieve_data('warehouse_message_disabled'),
+        'rmq_server' 					=> $self->retrieve_data('rmq_server'),
+        'rmq_port' 						=> $self->retrieve_data('rmq_port'),
+        'rmq_vhost' 					=> $self->retrieve_data('rmq_vhost'),
+        'rmq_exchange' 					=> $self->retrieve_data('rmq_exchange'),
+        'rmq_user' 						=> $self->retrieve_data('rmq_user')
     );
     $self->output_html( $template->output() );
 }
@@ -746,10 +783,7 @@ sub install {
         ('circulation', 'WR_SLIP', '', 'Warehouse Request - Print Slip', 1, 'Test', '<div class=\"message\">\r\n        <pre>\r\n            <div class=\"user\"><<borrowers.surname>> <<borrowers.firstname>><<warehouse_request_patron_name>></div>\r\n            <div class=\"requestdate\"><strong>Ticket n° <<warehouse_request_id>>, le <<warehouse_request_created_on>></strong></div>\r\n            <div class=\"content\">		\r\n                <div class=\"typedoc\"><strong><<biblioitems.itemtype>></strong></div>		\r\n                <div class=\"requestdoc\"><<biblio.title>> / <<biblio.author>> ;  <<biblioitems.publicationyear>></div>\r\n                <div class=\"barcode\"><<items.itemcallnumber>></div>\r\n                <div class=\"volnum\"><strong>Vol.</strong> <<warehouse_request_volume>> - <strong>N°</strong> <<warehouse_request_issue>> - <strong>Année : </strong> <<warehouse_request_date>></div>\r\n                <div class=\"note\"><<warehouse_request_patron_notes>></div>\r\n            </div>\r\n        </pre>\r\n     </div>', 'print'),
         ('circulation', 'WR_WAITING', '', '[BU Rennes 2] Document disponible', 1, '[BU Rennes 2] Document disponible', '<p>Bonjour <<borrowers.firstname>> <<borrowers.surname>>,</p>\r\n\r\n<p>Votre document est <strong>disponible</strong>, il peut être retiré à l''accueil de la BU centrale.</p>\r\n<p>Pour rappel, il s''agissait d''une demande concernant :\r\n\r\n<ul style=\"list-style-type:none;\">\r\n  <li>Titre : <em><<biblio.title>></em></li>\r\n  <li>Auteur: <em><<biblio.author>></em></li>\r\n  <li>Cote : <em><<items.itemcallnumber>></em></li>\r\n</ul>\r\n<strong>Vous avez jusqu''à 3 jours pour venir consulter ou emprunter ce dernier. Au-delà et sans nouvelle de votre part, il sera remis en rayon.</strong></p>\r\n\r\n<p>N''hésitez pas à nous contacter si toutefois vous n''étiez pas en mesure de vous déplacer. </p>\r\n\r\n<p>Cordialement,</p>\r\n<table border=\"0\" cellpadding=\"0\" cellspacing=\"2\" width=\"600\"><tbody><tr><td valign=\"top\" width=\"120\"><div align=\"center\"><a href=\"http://www.bu.univ-rennes2.fr\"><img src=\"https://www.bu.univ-rennes2.fr/sites/all/themes/bootstrap_bur2/img/logo_bu_rennes2.png\" alt=\"Logo BU Rennes 2\" moz-do-not-send=\"false\" style=\"padding-bottom:5px;\" border=\"0\" height=\"auto\" width=\"120\"></a><br> <a href=\"https://www.facebook.com/bibliotheques.univ.rennes2/\"><img moz-do-not-send=\"false\" alt=\"Logo Facebook\" src=\"https://www.univ-rennes2.fr/system/files/UHB/SERVICE-COMMUNICATION/facebook_logo.png\" border=\"0\" height=\"20\" width=\"20\"></a>  <a href=\"http://twitter.com/BURennes2\"><img alt=\"Logo Twitter\" moz-do-not-send=\"false\" src=\"https://www.univ-rennes2.fr/system/files/UHB/SERVICE-COMMUNICATION/twitter_logo.png\" border=\"0\" height=\"20\" width=\"20\"></a>  </div><br></td><td valign=\"top\"><small>\r\n<b><<branches.branchname>></b><br>\r\nBU Rennes 2<br>\r\n02 99 14 12 75<br>\r\n <a href=\"https://www.bu.univ-rennes2.fr\" title=\"BU en ligne\">www.bu.univ-rennes2.fr</a>\r\n</td></tr></tbody></table>', 'email');
     ");
-    $success = $success && symlink(
-        C4::Context->config('pluginsdir')."/Koha/Plugin/Fr/UnivRennes2/WRM/Schema/WarehouseRequest.pm",
-        C4::Context->config('intranetdir')."/Koha/Schema/Result/WarehouseRequest.pm"
-    );
+
     if ( $success ) {
         my $avc = Koha::AuthorisedValueCategory->new({ category_name => $reason_category });
         eval { $avc->store };
@@ -783,9 +817,6 @@ sub uninstall {
     my ( $self, $args ) = @_;
     my $success = C4::Context->dbh->do("DROP TABLE IF EXISTS `warehouse_requests`;");
     $success = $success && C4::Context->dbh->do("DELETE FROM letter WHERE code IN ('WR_CANCELED', 'WR_COMPLETED', 'WR_PENDING', 'WR_PROCESSING', 'WR_SLIP', 'WR_WAITING');");
-    if ( -l C4::Context->config('intranetdir')."/Koha/Schema/Result/WarehouseRequest.pm") {
-        $success = $success && unlink C4::Context->config('intranetdir')."/Koha/Schema/Result/WarehouseRequest.pm";
-    }
     if ( $success ) {
         my @av_reasons = Koha::AuthorisedValues->new->search({ category => $reason_category });
         while ( $success and my $av = each @av_reasons ) {

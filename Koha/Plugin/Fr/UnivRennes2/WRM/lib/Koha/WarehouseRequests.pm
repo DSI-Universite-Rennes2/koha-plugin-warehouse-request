@@ -1,4 +1,4 @@
-package Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests;
+package Koha::WarehouseRequests;
 
 # Copyright ByWater Solutions 2015
 #
@@ -23,14 +23,14 @@ use Carp;
 
 use Koha::Database;
 use Koha::DateUtils qw(dt_from_string);
-use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequest;
-use Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status;
+use Koha::WarehouseRequest;
+use Koha::WarehouseRequestStatus;
 
 use base qw(Koha::Objects);
 
 =head1 NAME
 
-Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests - Koha WarehouseRequests Object class
+Koha::WarehouseRequests - Koha WarehouseRequests Object class
 
 =head1 API
 
@@ -44,9 +44,9 @@ Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests - Koha WarehouseRe
 
 sub pending {
     my ( $self, $branchcode ) = @_;
-    my $params = { status => Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::Pending, archived => 0 };
+    my $params = { status => Koha::WarehouseRequestStatus::Pending, archived => 0 };
     $params->{branchcode} = $branchcode if $branchcode;
-    return Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search( $params );
+    return Koha::WarehouseRequests->search( $params );
 }
 
 =head3 processing
@@ -55,9 +55,9 @@ sub pending {
 
 sub processing {
     my ( $self, $branchcode ) = @_;
-    my $params = { status => Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::Processing, archived => 0 };
+    my $params = { status => Koha::WarehouseRequestStatus::Processing, archived => 0 };
     $params->{branchcode} = $branchcode if $branchcode;
-    return Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search( $params );
+    return Koha::WarehouseRequests->search( $params );
 }
 
 =head3 waiting
@@ -66,9 +66,9 @@ sub processing {
 
 sub waiting {
     my ( $self, $branchcode ) = @_;
-    my $params = { status => Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::Waiting, archived => 0 };
+    my $params = { status => Koha::WarehouseRequestStatus::Waiting, archived => 0 };
     $params->{branchcode} = $branchcode if $branchcode;
-    return Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search( $params );
+    return Koha::WarehouseRequests->search( $params );
 }
 
 =head3 completed
@@ -77,9 +77,9 @@ sub waiting {
 
 sub completed {
     my ( $self, $branchcode ) = @_;
-    my $params = { status => Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::Completed, archived => 0 };
+    my $params = { status => Koha::WarehouseRequestStatus::Completed, archived => 0 };
     $params->{branchcode} = $branchcode if $branchcode;
-    return Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search( $params );
+    return Koha::WarehouseRequests->search( $params );
 }
 
 =head3 canceled
@@ -88,9 +88,9 @@ sub completed {
 
 sub canceled {
     my ( $self, $branchcode ) = @_;
-    my $params = { status => Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::Canceled, archived => 0 };
+    my $params = { status => Koha::WarehouseRequestStatus::Canceled, archived => 0 };
     $params->{branchcode} = $branchcode if $branchcode;
-    return Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search( $params );
+    return Koha::WarehouseRequests->search( $params );
 }
 
 =head3 toarchive
@@ -102,12 +102,12 @@ sub to_archive {
     my $date = dt_from_string();
     $date->subtract( days => $older_than );
     my $dtf = Koha::Database->new->schema->storage->datetime_parser;
-    return Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search({
+    return Koha::WarehouseRequests->search({
         archived => 0,
         updated_on => { '<=' => $dtf->format_date($date) },
         -or => [
-            { status => Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::Completed },
-            { status => Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::Canceled }
+            { status => Koha::WarehouseRequestStatus::Completed },
+            { status => Koha::WarehouseRequestStatus::Canceled }
         ]
     });
 }
@@ -121,7 +121,7 @@ sub archived_since {
     my $date = dt_from_string();
     $date->subtract( days => $since );
     my $dtf = Koha::Database->new->schema->storage->datetime_parser;
-    return Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search({
+    return Koha::WarehouseRequests->search({
         archived => 1,
         updated_on => { '<=' => $dtf->format_date($date) }
     });
@@ -136,7 +136,7 @@ sub _type {
 }
 
 sub object_class {
-    return 'Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequest';
+    return 'Koha::WarehouseRequest';
 }
 
 =head1 AUTHOR

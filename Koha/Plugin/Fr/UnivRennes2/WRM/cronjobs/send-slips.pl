@@ -26,8 +26,6 @@ use Try::Tiny;
 use Koha::Libraries; 
 use Koha::Plugins::Handler;
 use Koha::Plugin::Fr::UnivRennes2::WRM;
-use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests;
-use Koha::Plugin::Fr::UnivRennes2::WRM::Object::Slip;
 
 my $plugin = Koha::Plugin::Fr::UnivRennes2::WRM->new();
 my ($rmq_server, $rmq_port, $rmq_vhost, $rmq_exchange, $rmq_user, $rmq_pwd) = $plugin->get_rmq_configuration();
@@ -36,14 +34,13 @@ my $query = new CGI;
 
 my $branches = Koha::Libraries->search()->unblessed;
 foreach my $branch ( @$branches ) {
-    my $av = Koha::AuthorisedValues->search({ category => 'FERMETURE_SERVICES', authorised_value => 'COMMAG_'.$branch });
-    my $closed = $av->count ? $av->next->lib : '';
+    my $is_enabled = $plugin->is_enabled ;
     
-    if ($closed eq '') {
-        my @pending_wr = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->pending($branch->{branchcode});
+    if ($is_enabled) {
+        my @pending_wr = Koha::WarehouseRequests->pending($branch->{branchcode});
         
         foreach my $wr (@pending_wr) {
-            my $pdf = Koha::Plugin::Fr::UnivRennes2::WRM::Object::Slip::getTicket($query, $wr->id, 1);
+            my $pdf = Koha::WarehouseRequestSlip::getTicket($query, $wr->id, 1);
             my $stream = bzdeflateInit() or die "Cannot create a deflation stream\n";
             my ($output, $status) = $stream->bzdeflate($pdf);
             $status == BZ_OK or die "deflation failed\n";

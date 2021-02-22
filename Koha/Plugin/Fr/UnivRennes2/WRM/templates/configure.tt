@@ -78,8 +78,25 @@
                                     [% END %]
                                 </select>
                             </li>
+                            <li>
+                                <label for="warehouse_opac_enabled"><span class="label">Activer les demandes côté OPAC : </span></label>
+                                [% IF warehouse_opac_enabled %]
+                                    <input name="warehouse_opac_enabled" id="warehouse_opac_enabled" value="1" type="checkbox" checked>
+                                [% ELSE %]
+                                    <input name="warehouse_opac_enabled" id="warehouse_opac_enabled" value="1" type="checkbox">
+                                [% END %]
+                                <span class="hint">Activer/désactiver la possibilité pour les utilisateurs de faire des demandes côté OPAC.</span>
+                            </li>
+
+                            <li>
+                                <label for="warehouse_message_disabled"><span class="label">Message si demandes opac sont désactivées : </span></label>
+                                 <textarea name="warehouse_message_disabled" id="warehouse_message_disabled">[% warehouse_message_disabled %]</textarea>
+                                <span class="hint">Message qui apparaitra pour indiquer que les demandes magasin sont fermées.</span>
+                            </li>
                         </ol>
+
                     </div>
+                    
                     <div class="rows">
                     <!-- Always pass these two parameters so the plugin system knows what to execute! -->
                         <h3>Configuration RabbitMQ (optionnel)</h3>

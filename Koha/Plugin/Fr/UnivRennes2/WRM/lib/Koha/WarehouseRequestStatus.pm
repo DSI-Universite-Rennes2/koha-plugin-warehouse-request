@@ -1,4 +1,4 @@
-package Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status;
+package Koha::WarehouseRequestStatus;
 
 # Copyright ByWater Solutions 2015
 #
@@ -18,6 +18,28 @@ package Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status;
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use Modern::Perl;
+
+use Carp;
+
+use Koha::Database;
+
+use Koha::WarehouseRequest;
+
+use base qw(Koha::Objects);
+
+=head1 NAME
+
+Koha::WarehouseRequestStatus - Koha Curbside Pickup Policies Object set class
+
+=head1 API
+
+=head2 Class Methods
+
+=cut
+
+=head3 type
+
+=cut
 
 sub Pending {
     return 'PENDING';

@@ -17,10 +17,9 @@ use Modern::Perl;
 
 use Koha::Plugins::Handler;
 use Koha::Plugin::Fr::UnivRennes2::WRM;
-use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests;
 
 my $plugin = Koha::Plugin::Fr::UnivRennes2::WRM->new();
-my @wr = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->to_archive( $plugin->get_days_since_archived );
+my @wr = Koha::WarehouseRequests->to_archive( $plugin->get_days_since_archived );
 foreach my $wr ( @wr ) {
     $wr->archive();
 }

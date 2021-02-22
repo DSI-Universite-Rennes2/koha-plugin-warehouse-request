@@ -17,7 +17,6 @@ use Modern::Perl;
 
 use Koha::Plugins::Handler;
 use Koha::Plugin::Fr::UnivRennes2::WRM;
-use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests;
 
 my $since = $ARGV[0];
 
@@ -26,7 +25,7 @@ if ( defined $since || !($since =~ /^\d+$/) ) {
 }
 
 my $plugin = Koha::Plugin::Fr::UnivRennes2::WRM->new();
-my @wr = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->archived_since( $since );
+my @wr = Koha::WarehouseRequests->archived_since( $since );
 my $counter = 0;
 foreach my $wr ( @wr ) {
     $counter += $wr->delete();

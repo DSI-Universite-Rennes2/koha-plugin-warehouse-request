@@ -23,26 +23,27 @@ use Koha::AuthorisedValues;
 use Koha::Items;
 use Koha::Library;
 use Koha::Plugin::Fr::UnivRennes2::WRM;
-use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequest;
-use Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests;
-use Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status;
 use Mojo::Base 'Mojolicious::Controller';
 
 sub update_status {
+    require Koha::WarehouseRequest;
+    require Koha::WarehouseRequests;
+    require Koha::WarehouseRequestStatus;
+
     my $c = shift->openapi->valid_input or return;
     
     my $id = $c->validation->param('id');
     my $action = $c->validation->param('action');
     my $notes = $c->validation->param('notes');
     
-    my $wr = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->find($id);
+    my $wr = Koha::WarehouseRequests->find($id);
     my $plugin = Koha::Plugin::Fr::UnivRennes2::WRM->new();
     
     if ($wr->status eq 'CANCELED' || $wr->status eq 'COMPLETED') {
         return $c->render(
             status => 403,
             openapi => {
-                error => 'Modification impossible car la demande est déjà '.lc Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::GetStatusLabel($wr->status).'.'
+                error => 'Modification impossible car la demande est déjà '.lc Koha::WarehouseRequestStatus::GetStatusLabel($wr->status).'.'
             }
         );
     }
@@ -132,6 +133,10 @@ sub check_requestable_items {
    }
 
 sub request {
+    require Koha::WarehouseRequest;
+    require Koha::WarehouseRequests;
+    require Koha::WarehouseRequestStatus;
+
     my $c = shift->openapi->valid_input or return;
     
     my $contenttype = $c->res->headers->content_type('application/javascript');
@@ -193,7 +198,7 @@ sub request {
         })->single();
     } else {
         $item = Koha::Items->find({ itemnumber => $itemnumber });
-                if (Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search({
+                if (Koha::WarehouseRequests->search({
             borrowernumber => $user->borrowernumber,
             itemnumber => $item->itemnumber,
             status => 'PENDING'
@@ -214,7 +219,7 @@ sub request {
         );
     }
     
-    my $wr = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequest->new({
+    my $wr = Koha::WarehouseRequest->new({
         borrowernumber => $user->borrowernumber,
         biblionumber => $item->biblionumber,
         branchcode => $branchcode,
@@ -240,6 +245,10 @@ sub request {
 }
 
 sub list {
+    require Koha::WarehouseRequest;
+    require Koha::WarehouseRequests;
+    require Koha::WarehouseRequestStatus;
+
     my $c = shift->openapi->valid_input or return;
     
     my $borrowernumber = $c->validation->param('borrowernumber');
@@ -266,7 +275,7 @@ sub list {
         }
     }
     
-    my $requests = Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search($params);
+    my $requests = Koha::WarehouseRequests->search($params);
     
     my @requests_list = $requests->as_list;
     @requests_list = map { _to_api( $_->TO_JSON, $_->biblio, $_->item, $_->branch, $_->borrower, (defined $status && $status ne '') ) } @requests_list;
@@ -278,6 +287,10 @@ sub list {
 }
 
 sub count {
+    require Koha::WarehouseRequest;
+    require Koha::WarehouseRequests;
+    require Koha::WarehouseRequestStatus;
+
     my $c = shift->openapi->valid_input or return;
     
     my $biblionumber = $c->validation->param('biblionumber');
@@ -291,12 +304,16 @@ sub count {
     return $c->render(
         status => 200,
         openapi => {
-            count => Koha::Plugin::Fr::UnivRennes2::WRM::Object::WarehouseRequests->search($arguments)->count()
+            count => Koha::WarehouseRequests->search($arguments)->count()
         }
     );
 }
 
 sub _to_api {
+    require Koha::WarehouseRequest;
+    require Koha::WarehouseRequests;
+    require Koha::WarehouseRequestStatus;
+
     my ($request, $biblio, $item, $branch, $borrower, $bystatus) = @_;
     $request->{branchname} = $branch->branchname;
     $request->{biblio} = {
@@ -317,7 +334,7 @@ sub _to_api {
             "phone" => $borrower->phone
         };
     }
-    $request->{statusstr} = Koha::Plugin::Fr::UnivRennes2::WRM::Object::Status::GetStatusLabel($request->{status});
+    $request->{statusstr} = Koha::WarehouseRequestStatus::GetStatusLabel($request->{status});
     return $request;
 }
 
