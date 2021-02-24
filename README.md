@@ -106,10 +106,10 @@ Les web services disponibles sont les suivants :
 
 - ```/api/v1/contrib/wrm/update_status``` : mettre à jour le statut d'une demande
 - ```/api/v1/contrib/wrm/request``` : effectuer une nouvelle demande
-- ```/api/v1/contrib/wrm/list``` : lister les demandes magasin
+- ```/api/v1/contrib/wrm/list``` : lister les demandes magasin de l'utilisateur courant
 - ```/api/v1/contrib/wrm/list/{borrowernumber}``` : lister les demandes magasin de l'utilisateur donné en paramètre
 - ```/api/v1/contrib/wrm/biblio/{biblionumber}``` : retourne les exemplaires communiquables pour une notice donnée
-- ```/api/v1/contrib/wrm/count``` : Total de demandes en cours sur une notice bibliographique
+- ```/api/v1/contrib/wrm/count``` : affiche le total de demandes en cours sur une notice bibliographique
 
 ## Historique
 
