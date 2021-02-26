@@ -1,6 +1,9 @@
 package Koha::Plugin::Fr::UnivRennes2::WRM;
 
+use utf8;
+
 use Modern::Perl;
+
 use Mojo::JSON qw(decode_json encode_json);
 
 use base qw(Koha::Plugins::Base);
@@ -54,7 +57,7 @@ our $VERSION = '{VERSION}';
 
 ## Here is our metadata, some keys are required, some are optional
 our $metadata = {
-    name            => 'Demandes magasin',
+    name            => 'Request From Stacks / Communication des documents en Magasin',
     author          => 'Sicot Julien/Joncour Gwendal',
     date_authored   => '2019-06-25',
     date_updated    => '2021-02-24',
@@ -378,8 +381,21 @@ sub intranet_js {
 sub configure {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
+
+    my $dir = $self->bundle_path.'/i18n';
+    opendir(my $dh, $dir) || die "Can't opendir $dir: $!";
+    my @files = grep { /^[^.]/ && -f "$dir/$_" } readdir($dh);
+    closedir $dh;
+
+    my @tokens;
+    foreach my $file (@files) {
+        my @splitted = split(/\./, $file, -1);
+        my $lang = $splitted[0];
+        push @tokens, {key => $lang, text => decode("UTF-8", $self->mbf_read('i18n/'.$file))};
+    }
     
     my $template = $self->get_template({ file => 'templates/configure.tt' });
+
     if ( $cgi->param('save') ) {
         my $myconf;
         $myconf->{days_to_keep}                 = $cgi->param('days_to_keep') || 0;
@@ -399,13 +415,13 @@ sub configure {
             if ( $cgi->param('rmq_pwd_conf') && $cgi->param('rmq_pwd') eq $cgi->param('rmq_pwd_conf') ) {
                 $myconf->{rmq_pwd} = $cgi->param('rmq_pwd');
             } else {
-                $template->param( 'config_error' => 'Les deux saisies du mot de passe RabbitMQ doivent être identiques.' );
+                $template->param( 'config_error' => 'CONF_ERROR' );
                 $myconf = undef;
             }
         }
         if ( $myconf ) {
             $self->store_data($myconf);
-            $template->param( 'config_success' => 'La configuration du plugin a été enregistrée avec succès !' );
+            $template->param( 'config_success' => 'CONF_SUCCESS' );
         }
     }
     
@@ -442,7 +458,6 @@ sub configure {
 		push @notforloan , { code => $_, description => $notforloan->{$_} };
 	}
 
-
     $template->param(
         'days_to_keep' 					=> $self->retrieve_data('days_to_keep'),
         'days_since_archived' 			=> $self->retrieve_data('days_since_archived'),
@@ -460,7 +475,8 @@ sub configure {
         'rmq_port' 						=> $self->retrieve_data('rmq_port'),
         'rmq_vhost' 					=> $self->retrieve_data('rmq_vhost'),
         'rmq_exchange' 					=> $self->retrieve_data('rmq_exchange'),
-        'rmq_user' 						=> $self->retrieve_data('rmq_user')
+        'rmq_user' 						=> $self->retrieve_data('rmq_user'),
+         tokens => \@tokens,
     );
     $self->output_html( $template->output() );
 }
