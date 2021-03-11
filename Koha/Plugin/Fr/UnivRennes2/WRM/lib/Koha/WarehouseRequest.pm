@@ -128,7 +128,8 @@ sub archive {
 
 sub calculate_deadline {
     my ( $self, $days_to_keep ) = @_;
-    my $calendar = Koha::Calendar->new(branchcode => $self->branchcode);
+    my $calendar = Koha::Calendar->new(branchcode => $self->branchcode,
+                                       days_mode => C4::Context->preference('useDaysMode') );
     my $deadline = DateTime->now( time_zone => C4::Context->tz() );
     while ( $days_to_keep > 0 ) {
         $deadline = $calendar->next_open_days( $deadline, 1 );
