@@ -48,7 +48,7 @@ Dans le module Outils de koha, un nouveau menu "Outils de plugin" apparaitra.
 
 1. Récupération des sources sur github, via clonage du dépôt : 
 ```
-git clone 
+git clone https://github.com/DSI-Universite-Rennes2/koha-plugin-warehouse-request.git
 ```
 2. Dans le répertoire ainsi créé, exécuter le script bash build.sh pour générer le paquet KPZ du plugin :
 ```
