@@ -351,7 +351,7 @@ sub opac_head {
 sub opac_js {
     my ($self) = @_;
 
-    return read_file( abs_path( $self->mbf_path('js/opac.js') ), encoding => 'utf8' );
+    return read_file( abs_path( $self->mbf_path('js/opac.js') ), { binmode => 'utf8' } );
 }
 
 sub intranet_head {
@@ -375,7 +375,7 @@ sub intranet_head {
 sub intranet_js {
     my ($self) = @_;
 
-    return read_file( abs_path( $self->mbf_path('js/intranet.js') ), encoding => 'utf8'  );
+    return read_file( abs_path( $self->mbf_path('js/intranet.js') ), { binmode => 'utf8' }  );
 }
 
 sub configure {
