@@ -309,7 +309,7 @@ sub get_days_since_archived {
 
 sub is_enabled {
     my ( $self, $args ) = @_;
-    my $is_enabled = $self->retrieve_data('warehouse_opac_enabled') // 0;
+    my $is_enabled = $self->retrieve_data('warehouse_opac_enabled') // 1;
     return $is_enabled;
 }
 
