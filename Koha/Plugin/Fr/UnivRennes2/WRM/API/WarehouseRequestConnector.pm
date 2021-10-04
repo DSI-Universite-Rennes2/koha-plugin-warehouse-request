@@ -315,8 +315,8 @@ sub _to_api {
     require Koha::WarehouseRequestStatus;
 
     my ($request, $biblio, $item, $branch, $borrower, $bystatus) = @_;
-    $request->{branchname} = $branch->branchname;
-    $request->{biblio} = {
+   $request->{branchname} = $item->holding_branch->branchname; 
+   $request->{biblio} = {
         "title" => $biblio->title,
         "author" => $biblio->author
     };
