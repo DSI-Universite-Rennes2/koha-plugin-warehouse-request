@@ -114,3 +114,14 @@ table.hbc td.hbc_on:before {
 table.hbc td.hbc_off:before {
     border: 999999px #FFF solid;
 }
+
+/* En 20.11, il y a une classe css qui outrepasse ces définitions */
+table.hbc td.hbc_off {
+    background-color: #fff!important;
+    color: inherit;
+}
+
+table.hbc td.hbc_on {
+    background-color: #000!important;
+    color: inherit;
+}
