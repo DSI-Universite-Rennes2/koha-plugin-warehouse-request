@@ -53,7 +53,7 @@ BEGIN {
 
 
 ## Here we set our plugin version
-our $VERSION = '{VERSION}';
+our $VERSION = '1.5';
 
 ## Here is our metadata, some keys are required, some are optional
 our $metadata = {
@@ -96,6 +96,8 @@ sub tool {
             $self->creation();
         } elsif ( $query->param('op') eq 'ticket' ) {
             $self->ticket();
+        } elsif ( $query->param('op') eq 'rawticket' ) {
+            $self->rawticket();
         }
     } else {
         my $template = $self->get_template({ file => 'templates/warehouse-requests.tt' });
@@ -291,6 +293,20 @@ sub ticket {
     my $slip = Koha::WarehouseRequestSlip::getTicket($query, $id);
     
     print "Content-type: application/pdf\nCharset: utf-8\n\n";
+    binmode(STDOUT);
+    print $slip;
+}
+
+
+sub rawticket {
+    my ( $self, $args ) = @_;
+
+    my $query = $self->{'cgi'};
+    my $id = $query->param('id');
+
+    my $slip = Koha::WarehouseRequestSlip::prepareTicket($query, $id);
+
+    print "Content-type: text/html\nCharset: utf-8\n\n";
     binmode(STDOUT);
     print $slip;
 }
