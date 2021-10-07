@@ -315,18 +315,27 @@ sub _to_api {
     require Koha::WarehouseRequestStatus;
 
     my ($request, $biblio, $item, $branch, $borrower, $bystatus) = @_;
-   $request->{branchname} = $item->holding_branch->branchname; 
-   $request->{biblio} = {
+    if ( $branch ) {   
+	$request->{branchname} = $branch->branchname; 
+    }
+    else { $request->{branchname} = $item->holding_branch->branchname; }
+    $request->{biblio} = {
         "title" => $biblio->title,
         "author" => $biblio->author
     };
+    my $holdingbranch = ($item && $item->holding_branch->branchname) ? $item->holding_branch->branchname: "";
+    my $location = ($item && $item->location) ? Koha::AuthorisedValues->find_by_koha_field( { kohafield => 'items.location', authorised_value => $item->location } )->lib: "";
+    my $itemtype = ($item && $item->effective_itemtype) ? Koha::ItemTypes->find( $item->effective_itemtype )->description: "";
+    my $itemcallnumber =  ($item && $item->itemcallnumber) ? $item->itemcallnumber: "";
+    my $barcode =  ($item && $item->barcode) ? $item->barcode: "";    
     $request->{item} = {
-        "holdingbranch" => $item->holding_branch->branchname,
-        "location" => Koha::AuthorisedValues->find_by_koha_field( { kohafield => 'items.location', authorised_value => $item->location } )->lib,
-        "itemtype" => Koha::ItemTypes->find( $item->effective_itemtype )->description,
-        "itemcallnumber" => $item->itemcallnumber,
-        "barcode" => $item->barcode
+        "holdingbranch" => $holdingbranch,
+        "location" => $location,
+        "itemtype" => $itemtype,
+        "itemcallnumber" => $itemcallnumber,
+        "barcode" => $barcode
     };
+    
     if ($bystatus) {
         $request->{borrower} = {
             "firstname" => $borrower->firstname,
